@@ -323,7 +323,7 @@ header.hide .hdr-right{visibility:hidden}
   </div>
   <div class="modal-bg" id="consentBg"><div class="modal">
     <h2>Apply with one swipe?</h2>
-    <p>When you swipe up, we send these details and your CV to the company, for that job only.</p>
+    <p>When you swipe up, we email these details and your CV from your own Gmail to the company's application address, for that job only. You can undo for a few seconds.</p>
     <div class="who" id="consentWho"></div>
     <div class="btns"><button id="consentNo" style="background:var(--chip);color:var(--ink)">Not now</button><button id="consentYes" style="background:var(--accent);color:#fff">Yes, apply</button></div>
   </div></div>
@@ -351,7 +351,14 @@ function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old
 (function restoreOb(){const o=store.get("ob",null);if(o)Object.assign(ob,o);})();
 // ---- account storage: Supabase ----
 const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co","sb_publishable_f2zVbN62xc6rqSrTmKp5Yg_XdlzBoZX");
-let UID=null;
+let UID=null, GMAIL="";
+async function connectGmail(){
+  try{
+    const {data,error}=await SB.functions.invoke("gmail-connect",{body:{}});
+    if(error||!data||!data.url) throw error||new Error("no url");
+    location.href=data.url;
+  }catch(e){toast("Couldn't connect Gmail right now");}
+}
 async function cloudSave(){
   if(!UID)return;
   const p=ob.profile;
@@ -372,7 +379,7 @@ async function cloudLoad(){
     SB.from("swipes").select("job_id,action")]);
   const d={likes:[],nopes:[],applies:[]};
   (sw||[]).forEach(r=>{(r.action==="like"?d.likes:r.action==="apply"?d.applies:d.nopes).push(r.job_id);});
-  if(pr){ d.ob={done:pr.onboarded,consent:pr.apply_consent,profile:{first:pr.first_name||"",last:pr.last_name||"",email:pr.email||"",phone:pr.phone||"",years:pr.years,cvName:pr.cv_name||"",cvPath:pr.cv_path||""}}; d.prefs=pr.prefs&&Object.keys(pr.prefs).length?pr.prefs:null; }
+  if(pr){ GMAIL=pr.gmail_email||""; d.ob={done:pr.onboarded,consent:pr.apply_consent,profile:{first:pr.first_name||"",last:pr.last_name||"",email:pr.email||"",phone:pr.phone||"",years:pr.years,cvName:pr.cv_name||"",cvPath:pr.cv_path||""}}; d.prefs=pr.prefs&&Object.keys(pr.prefs).length?pr.prefs:null; }
   return d;
 }
 function applyCloud(d){
@@ -386,7 +393,11 @@ async function saveSwipe(j,dir){
   if(!UID)return;
   try{
     await SB.from("swipes").upsert({user_id:UID,job_id:j.id,action:dir});
-    if(dir==="apply") await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:j.u,status:"queued"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
+    if(dir==="apply"){
+      await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:j.u,status:"queued"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
+      // The server waits a few seconds (so Undo still works), then emails the CV from the user's Gmail
+      SB.functions.invoke("send-application",{body:{job_id:j.id}}).catch(()=>{});
+    }
   }catch(e){}
 }
 async function removeSwipe(j,dir){
@@ -556,7 +567,7 @@ const listOf=d=>d==="like"?state.likes:d==="apply"?state.applies:state.nopes;
 let busy=false;
 function swipe(dir){
   if(busy||!state.queue.length)return;
-  if(dir==="apply"&&!ob.consent){askConsent();return;}
+  if(dir==="apply"&&(!ob.consent||!GMAIL)){askConsent();return;}
   busy=true;
   const card=$("deck").lastElementChild, j=state.queue[0];
   card.classList.add("anim");
@@ -610,8 +621,10 @@ function openSheet(j,fromSaved){
   sheetFromSaved=!!fromSaved;
   const acts=$("sheetActions");
   if(fromSaved){
-    const st=(window.__appStatus||{})[j.id];
-    if(canFill(j)&&st!=="sent"&&st!=="cancelled"){
+    const st=(window.__appStatus||{})[j.id], det=(window.__appDetail||{})[j.id];
+    if(st) $("sheetBody").insertAdjacentHTML("afterbegin",`<div style="padding:10px 12px;border-radius:10px;background:var(--chip);margin-bottom:10px;font-size:14px">${statusLabel(st)}${det?`<div style="color:var(--muted);margin-top:4px">${esc(det)}</div>`:""}${st==="needs_you"&&/gmail/i.test(det||"")?`<button class="b-yes" id="sGmail" style="margin-top:8px;background:var(--accent)">Connect Gmail</button>`:""}</div>`);
+    if($("sGmail")) $("sGmail").onclick=()=>connectGmail();
+    if(EXT&&canFill(j)&&st!=="sent"&&st!=="cancelled"){
       acts.innerHTML=`<a class="alink" href="${esc(safeUrl(j.u))}" target="_blank" rel="noopener" style="background:var(--chip);color:var(--ink)">Company site ↗</a><button class="b-yes" id="sFill" style="background:var(--accent)">Open filled form</button>`;
       $("sFill").onclick=()=>openFilled(j);
     } else
@@ -665,7 +678,7 @@ async function openFilled(j){
 
 const STATUS={queued:"Waiting to send",sending:"Sending…",sent:"Sent ✓",failed:"Couldn't send",needs_you:"Needs you",cancelled:"Cancelled"};
 function statusLabel(s){return `<span style="font-weight:700;color:${s==="sent"?"var(--yes)":s==="failed"||s==="needs_you"?"var(--no)":"var(--muted)"}">${STATUS[s]||"Waiting to send"}</span>`;}
-async function loadStatuses(){ if(!UID)return; const {data}=await SB.from("applications").select("job_id,status"); window.__appStatus=Object.fromEntries((data||[]).map(r=>[r.job_id,r.status])); }
+async function loadStatuses(){ if(!UID)return; const {data}=await SB.from("applications").select("job_id,status,detail"); window.__appStatus=Object.fromEntries((data||[]).map(r=>[r.job_id,r.status])); window.__appDetail=Object.fromEntries((data||[]).map(r=>[r.job_id,r.detail||""])); }
 function renderSaved(t){
   if(t==="apply"&&!renderSaved._busy){renderSaved._busy=true;loadStatuses().then(()=>{renderSaved._busy=false;if($("s-saved").classList.contains("active"))renderSaved("apply");});}
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
@@ -674,7 +687,7 @@ function renderSaved(t){
   $("savedList").innerHTML=(list.length?"":`<div style="color:var(--muted);padding:20px 4px">Nothing here yet.</div>`);
   list.slice().reverse().forEach(j=>{
     const r=document.createElement("div");r.className="row";
-    r.innerHTML=`<div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div><div style="min-width:0"><div class="t" dir="auto">${esc(j.t)}</div><div class="s">${esc(j.c)} · ${esc(j.ci)}</div></div><div class="y">${t==="apply"?(canFill(j)&&(!stat[j.id]||stat[j.id]==="queued"||stat[j.id]==="needs_you")?statusLabel("needs_you"):statusLabel(stat[j.id])):(j.y==null?"?":j.y===0?"Entry":j.y+"+ yrs")}</div>`;
+    r.innerHTML=`<div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div><div style="min-width:0"><div class="t" dir="auto">${esc(j.t)}</div><div class="s">${esc(j.c)} · ${esc(j.ci)}</div></div><div class="y">${t==="apply"?statusLabel(stat[j.id]):(j.y==null?"?":j.y===0?"Entry":j.y+"+ yrs")}</div>`;
     r.onclick=()=>openSheet(j,true); $("savedList").appendChild(r);
   });
 }
@@ -762,13 +775,33 @@ function refreshTop(){
 function card(){return state.queue[0];}
 function askConsent(){
   const p=ob.profile;
-  $("consentWho").innerHTML=`<b>${esc(p.first)} ${esc(p.last)}</b><br>${esc(p.email)} · ${esc(p.phone)}<br>📄 ${esc(p.cvName||"Your CV")}`;
+  $("consentWho").innerHTML=`<b>${esc(p.first)} ${esc(p.last)}</b><br>${esc(p.email)} · ${esc(p.phone)}<br>📄 ${esc(p.cvName||"Your CV")}<br>✉️ ${GMAIL?"Sent from "+esc(GMAIL):"Sent from your Gmail (connect it in the next step)"}`;
+  $("consentYes").textContent=GMAIL?"Yes, apply":"Connect Gmail & apply";
   $("consentBg").classList.add("open");
   // reset any half-dragged card
   const c=$("deck").lastElementChild; if(c&&c.classList.contains("card")){c.classList.add("anim");c.style.transform="";c.querySelectorAll(".stamp").forEach(x=>x.style.opacity=0);}
 }
 $("consentNo").onclick=()=>$("consentBg").classList.remove("open");
-$("consentYes").onclick=()=>{ob.consent=true;saveOb();$("consentBg").classList.remove("open");setTimeout(()=>swipe("apply"),150);};
+$("consentYes").onclick=async()=>{
+  ob.consent=true;saveOb();$("consentBg").classList.remove("open");
+  if(!GMAIL){ const j=card(); if(j)store.set("pendingApply",j.id); await cloudSave(); connectGmail(); return; }
+  setTimeout(()=>swipe("apply"),150);
+};
+// Back from Google: #gmail=ok | cancelled | error | noscope
+function handleGmailReturn(){
+  const m=(location.hash||"").match(/^#gmail=(\w+)$/); if(!m)return false;
+  history.replaceState(null,"",location.pathname);
+  const pend=store.get("pendingApply",null); store.set("pendingApply",null);
+  if(m[1]==="ok"){
+    toast("Gmail connected");
+    // resend applications that were waiting for Gmail
+    SB.from("applications").update({status:"queued",detail:"Retrying after Gmail was connected"}).eq("status","needs_you").ilike("detail","%gmail%").select("job_id")
+      .then(({data})=>(data||[]).forEach(r=>SB.functions.invoke("send-application",{body:{job_id:r.job_id}}).catch(()=>{})));
+    const j=pend&&JOBS.find(x=>x.id===pend);
+    if(j&&GMAIL){ state.queue=[j,...state.queue.filter(x=>x!==j)]; renderDeck(); setTimeout(()=>swipe("apply"),400); }
+  } else toast(m[1]==="noscope"?"Please allow sending email to apply with one swipe":"Gmail wasn't connected");
+  return true;
+}
 
 $("wStart").onclick=()=>go("cv");
 $("editProfile").onclick=()=>{fillConfirm();go("cv");};
@@ -875,7 +908,7 @@ async function boot(session){
     state.applies=store.get("applies",[]).map(id=>byId.get(id)).filter(Boolean);
     $("dataInfo").textContent="";
     updateCount();
-    if(ob.done){buildQueue();openHashJob();renderDeck();go("deck");} else go("welcome");
+    if(ob.done){buildQueue();openHashJob();renderDeck();go("deck");handleGmailReturn();} else go("welcome");
     aiInit();
     window.addEventListener("hashchange",()=>{if(ob.done&&openHashJob()){renderDeck();go("deck");}});
   }catch(e){ document.querySelector("#s-loading .loading").textContent="Couldn't load the jobs. Please refresh the page."; }
