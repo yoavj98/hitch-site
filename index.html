@@ -362,8 +362,11 @@ async function connectGmail(){
 async function cloudSave(){
   if(!UID)return;
   const p=ob.profile;
-  try{ await SB.from("profiles").upsert({id:UID,first_name:p.first,last_name:p.last,email:p.email,phone:p.phone,years:p.years,
-    cv_name:p.cvName||null,cv_path:p.cvPath||null,apply_consent:!!ob.consent,onboarded:!!ob.done,prefs:store.get("prefs",{}),updated_at:new Date().toISOString()}); }catch(e){}
+  // Never send consent=false: an old tab or second device must not switch off a consent given elsewhere.
+  const row={id:UID,first_name:p.first,last_name:p.last,email:p.email,phone:p.phone,years:p.years,
+    cv_name:p.cvName||null,cv_path:p.cvPath||null,onboarded:!!ob.done,prefs:store.get("prefs",{}),updated_at:new Date().toISOString()};
+  if(ob.consent) row.apply_consent=true;
+  try{ await SB.from("profiles").upsert(row); }catch(e){}
 }
 let cloudT=null; function cloudSoon(){clearTimeout(cloudT);cloudT=setTimeout(cloudSave,600);}
 async function cloudSaveCv(file){
@@ -379,7 +382,7 @@ async function cloudLoad(){
     SB.from("swipes").select("job_id,action")]);
   const d={likes:[],nopes:[],applies:[]};
   (sw||[]).forEach(r=>{(r.action==="like"?d.likes:r.action==="apply"?d.applies:d.nopes).push(r.job_id);});
-  if(pr){ GMAIL=pr.gmail_email||""; d.ob={done:pr.onboarded,consent:pr.apply_consent,profile:{first:pr.first_name||"",last:pr.last_name||"",email:pr.email||"",phone:pr.phone||"",years:pr.years,cvName:pr.cv_name||"",cvPath:pr.cv_path||""}}; d.prefs=pr.prefs&&Object.keys(pr.prefs).length?pr.prefs:null; }
+  if(pr){ GMAIL=pr.gmail_email||""; window.__answers=pr.answers||{}; d.ob={done:pr.onboarded,consent:pr.apply_consent,profile:{first:pr.first_name||"",last:pr.last_name||"",email:pr.email||"",phone:pr.phone||"",years:pr.years,cvName:pr.cv_name||"",cvPath:pr.cv_path||""}}; d.prefs=pr.prefs&&Object.keys(pr.prefs).length?pr.prefs:null; }
   return d;
 }
 function applyCloud(d){
@@ -622,8 +625,17 @@ function openSheet(j,fromSaved){
   const acts=$("sheetActions");
   if(fromSaved){
     const st=(window.__appStatus||{})[j.id], det=(window.__appDetail||{})[j.id];
-    if(st) $("sheetBody").insertAdjacentHTML("afterbegin",`<div style="padding:10px 12px;border-radius:10px;background:var(--chip);margin-bottom:10px;font-size:14px">${statusLabel(st)}${det?`<div style="color:var(--muted);margin-top:4px">${esc(det)}</div>`:""}${st==="needs_you"&&/gmail/i.test(det||"")?`<button class="b-yes" id="sGmail" style="margin-top:8px;background:var(--accent)">Connect Gmail</button>`:""}</div>`);
+    if(st) $("sheetBody").insertAdjacentHTML("afterbegin",`<div style="padding:10px 12px;border-radius:10px;background:var(--chip);margin-bottom:10px;font-size:14px">${statusLabel(st)}${det?`<div style="color:var(--muted);margin-top:4px">${esc(det)}</div>`:""}${st==="needs_you"&&/gmail/i.test(det||"")&&!GMAIL?`<button class="b-yes" id="sGmail" style="margin-top:8px;background:var(--accent)">Connect Gmail</button>`
+      :st==="needs_you"&&j.ats==="comeet"?`<button class="b-yes" id="sRetry" style="margin-top:8px;background:var(--accent)">${/consent/i.test(det||"")?"Allow auto-apply & send":"Send again"}</button>`:""}</div>`);
     if($("sGmail")) $("sGmail").onclick=()=>connectGmail();
+    if($("sRetry")) $("sRetry").onclick=async()=>{
+      if(/consent/i.test(det||"")){ob.consent=true;store.set("ob",ob);await cloudSave();}
+      if(/check your gmail sent/i.test(det||"")&&!confirm("Check your Gmail Sent folder first. Send it again anyway?"))return;
+      const {error}=await SB.from("applications").update({status:"queued",detail:"Sending again"}).eq("job_id",j.id).eq("status","needs_you");
+      if(error){toast("Couldn't send again");return;}
+      SB.functions.invoke("send-application",{body:{job_id:j.id}}).catch(()=>{});
+      closeSheet(); toast("Sending in a few seconds"); loadStatuses().then(()=>renderSaved("apply"));
+    };
     if(EXT&&canFill(j)&&st!=="sent"&&st!=="cancelled"){
       acts.innerHTML=`<a class="alink" href="${esc(safeUrl(j.u))}" target="_blank" rel="noopener" style="background:var(--chip);color:var(--ink)">Company site ↗</a><button class="b-yes" id="sFill" style="background:var(--accent)">Open filled form</button>`;
       $("sFill").onclick=()=>openFilled(j);
@@ -668,7 +680,7 @@ async function openFilled(j){
   try{
     const p=ob.profile;
     const {data:s}=p.cvPath?await SB.storage.from("cvs").createSignedUrl(p.cvPath,1800):{data:null};
-    const data={first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:p.cvName||"CV.pdf",cvUrl:s&&s.signedUrl||"",answers:(store.get("prefs",{})||{}).answers||{}};
+    const data={first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:p.cvName||"CV.pdf",cvUrl:s&&s.signedUrl||"",answers:window.__answers||{}};
     const pos=posOf(j);
     await new Promise(res=>{const h=e=>{if(e.data&&e.data.type==="hitch-fill-ok"&&e.data.pos===pos){window.removeEventListener("message",h);res();}};
       window.addEventListener("message",h); window.postMessage({type:"hitch-fill",pos,data},location.origin); setTimeout(res,2000);});
