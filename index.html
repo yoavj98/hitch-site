@@ -373,6 +373,7 @@ async function openInApp(j){
 window.hitchFromApp=async function(m){
   if(!m)return;
   if(m.type==="session"){ const {error}=await SB.auth.setSession({access_token:m.access_token,refresh_token:m.refresh_token}); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
+  if(m.type==="cancelled"){ undoJob(m.jobId); return; }
   if(m.type==="code"){ const {error}=await SB.auth.exchangeCodeForSession(m.code); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
   if(m.type==="login-error"){ $("lgErr").style.color=""; $("lgErr").textContent=/signup|not allowed/i.test(m.error||"")?"This Google account's email hasn't been invited yet.":m.error; return; }
   if(!UID)return;
@@ -428,6 +429,7 @@ async function saveSwipe(j,dir,inAppForm){
     if(dir==="apply"&&inAppForm){
       // the app opens the company's form filled in; the user presses Send there
       await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:formUrlOf(j),status:"queued",detail:"Opened in the app"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
+      await SB.from("applications").update({status:"queued",detail:"Opened in the app"}).eq("job_id",j.id).eq("status","cancelled");
     } else if(dir==="apply"){
       await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:j.u,status:"queued"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
       // The server waits a few seconds (so Undo still works), then emails the CV from the user's Gmail
@@ -617,6 +619,13 @@ function swipe(dir){
   else if(inAppForm) openInApp(j);
   else if(dir==="apply") toast(`Applying to ${j.c} · queued`);
   setTimeout(()=>{busy=false;renderDeck();go("deck");},260);
+}
+function undoJob(jobId){
+  const i=state.history.map(h=>h.j.id).lastIndexOf(jobId); if(i<0)return;
+  const [h]=state.history.splice(i,1);
+  const arr=listOf(h.dir); const k=arr.indexOf(h.j); if(k>=0)arr.splice(k,1);
+  persist(); removeSwipe(h.j,h.dir);
+  state.queue=[h.j,...state.queue.filter(x=>x!==h.j)]; renderDeck(); go("deck"); toast("Cancelled");
 }
 function undo(){
   const last=state.history.pop(); if(!last)return;
