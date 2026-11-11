@@ -208,6 +208,7 @@ header.hide .hdr-right{visibility:hidden}
         <div class="err" id="lgErr" style="margin-top:12px"></div>
       </div>
       <div class="spacer"></div>
+      <button class="primary" id="lgGoogle" style="margin-bottom:10px;background:#fff;color:#222;border:1px solid #ddd">Continue with Google</button>
       <button class="primary" id="lgPassBtn" style="margin-bottom:10px">Sign in with password</button>
       <button class="primary" id="lgSend" style="background:var(--chip);color:var(--ink)">Send me a sign-in link</button>
     </div>
@@ -370,7 +371,11 @@ async function openInApp(j){
 }
 // Messages from the app: {type:"sent", jobId} after the company's thank-you page appeared
 window.hitchFromApp=async function(m){
-  if(!m||!UID)return;
+  if(!m)return;
+  if(m.type==="session"){ const {error}=await SB.auth.setSession({access_token:m.access_token,refresh_token:m.refresh_token}); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
+  if(m.type==="code"){ const {error}=await SB.auth.exchangeCodeForSession(m.code); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
+  if(m.type==="login-error"){ $("lgErr").style.color=""; $("lgErr").textContent=/signup|not allowed/i.test(m.error||"")?"This Google account's email hasn't been invited yet.":m.error; return; }
+  if(!UID)return;
   if(m.type==="sent"){
     await SB.from("applications").update({status:"sent",detail:"Sent from the app"}).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
     const j=JOBS.find(x=>x.id===m.jobId); toast(`Sent to ${j?j.c:"the company"} ✓`);
@@ -980,6 +985,17 @@ $("lgSend").onclick=async()=>{
   $("lgCodeBox").style.display=""; $("lgSend").textContent="Send a new link"; $("lgCode").value=""; $("lgCode").focus();
 };
 $("lgCode").addEventListener("input",()=>{ const v=$("lgCode").value.trim(); if(/^https?:\/\/\S+token=/.test(v)||/^\d{6}$/.test(v)) verifyCode(); });
+// Google: in the app it opens the phone's own sign-in window (Google blocks embedded pages); on the web a normal redirect
+$("lgGoogle").onclick=async()=>{
+  const ret=new URLSearchParams(location.search).get("ret");
+  if(IN_APP&&ret){
+    const {data,error}=await SB.auth.signInWithOAuth({provider:"google",options:{redirectTo:ret,skipBrowserRedirect:true}});
+    if(error||!data||!data.url){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in isn't available yet.";return;}
+    toApp({type:"google-login",url:data.url});
+  } else {
+    await SB.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname}});
+  }
+};
 $("lgPassBtn").onclick=async()=>{
   const email=$("lgEmail").value.trim(), password=$("lgPass").value;
   if(!email||!password){$("lgErr").style.color="";$("lgErr").textContent="Enter your email and password.";return;}
