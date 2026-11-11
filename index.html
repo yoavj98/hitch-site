@@ -203,11 +203,13 @@ header.hide .hdr-right{visibility:hidden}
         <div class="big">Hit<span>ch</span></div>
         <p class="lead">Hitch is invite-only. Enter the email you were invited with and we'll send you a sign-in link.</p>
         <div class="form"><label>Email<input id="lgEmail" type="email" autocomplete="email"></label></div>
+        <div class="form" style="margin-top:10px"><label>Password (if you set one)<input id="lgPass" type="password" autocomplete="current-password"></label></div>
         <div class="form" id="lgCodeBox" style="display:none;margin-top:10px"><label>Paste the sign-in link from the email (or its code)<input id="lgCode" autocomplete="one-time-code"></label></div>
         <div class="err" id="lgErr" style="margin-top:12px"></div>
       </div>
       <div class="spacer"></div>
-      <button class="primary" id="lgSend">Send me a sign-in link</button>
+      <button class="primary" id="lgPassBtn" style="margin-bottom:10px">Sign in with password</button>
+      <button class="primary" id="lgSend" style="background:var(--chip);color:var(--ink)">Send me a sign-in link</button>
     </div>
   </section>
   <!-- 0a. Welcome -->
@@ -948,6 +950,7 @@ async function boot(session){
     $("dataInfo").textContent="";
     updateCount();
     if(ob.done){buildQueue();openHashJob();renderDeck();go("deck");handleGmailReturn();} else go("welcome");
+    setPasswordPage();
     aiInit();
     window.addEventListener("hashchange",()=>{if(ob.done&&openHashJob()){renderDeck();go("deck");}});
   }catch(e){ document.querySelector("#s-loading .loading").textContent="Couldn't load the jobs. Please refresh the page."; }
@@ -977,6 +980,35 @@ $("lgSend").onclick=async()=>{
   $("lgCodeBox").style.display=""; $("lgSend").textContent="Send a new link"; $("lgCode").value=""; $("lgCode").focus();
 };
 $("lgCode").addEventListener("input",()=>{ const v=$("lgCode").value.trim(); if(/^https?:\/\/\S+token=/.test(v)||/^\d{6}$/.test(v)) verifyCode(); });
+$("lgPassBtn").onclick=async()=>{
+  const email=$("lgEmail").value.trim(), password=$("lgPass").value;
+  if(!email||!password){$("lgErr").style.color="";$("lgErr").textContent="Enter your email and password.";return;}
+  $("lgPassBtn").disabled=true;
+  const {error}=await SB.auth.signInWithPassword({email,password});
+  $("lgPassBtn").disabled=false;
+  if(error){$("lgErr").style.color="";$("lgErr").textContent="Email or password is wrong. (Set a password first on the website: open it with #set-password at the end.)";}
+};
+// Open the site with #set-password while signed in to choose a password for the app
+function setPasswordPage(){
+  if(location.hash!=="#set-password")return;
+  const bg=document.createElement("div");
+  bg.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center";
+  bg.innerHTML=`<div style="background:#fff;border-radius:16px;padding:22px;width:min(360px,90vw);font:15px Inter,system-ui">
+    <h3 style="margin:0 0 6px">Choose a password</h3><p style="color:#666;margin:0 0 12px">Use it to sign in to the Hitch app.</p>
+    <input id="spA" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:8px;border:1px solid #ddd;border-radius:10px">
+    <input id="spB" type="password" placeholder="Repeat password" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ddd;border-radius:10px">
+    <div id="spErr" style="color:#c0392b;min-height:18px;margin-bottom:8px"></div>
+    <button id="spSave" style="width:100%;padding:12px;border:none;border-radius:12px;background:#2f5bea;color:#fff;font-weight:700">Save password</button></div>`;
+  document.body.appendChild(bg);
+  $("spSave").onclick=async()=>{
+    const a=$("spA").value,b=$("spB").value;
+    if(a.length<8){$("spErr").textContent="At least 8 characters.";return;}
+    if(a!==b){$("spErr").textContent="The two passwords don't match.";return;}
+    const {error}=await SB.auth.updateUser({password:a});
+    if(error){$("spErr").textContent=error.message;return;}
+    history.replaceState(null,"",location.pathname); bg.remove(); toast("Password saved. Use it in the app.");
+  };
+}
 $("signOut").onclick=async()=>{await SB.auth.signOut(); try{localStorage.clear();}catch(e){} location.reload();};
 SB.auth.onAuthStateChange((ev,session)=>{ if(session) boot(session); });
 SB.auth.getSession().then(({data})=>{ if(data.session) boot(data.session); else go("login"); });
