@@ -357,7 +357,7 @@ let UID=null, GMAIL="";
 // ---- Running inside the Hitch phone app: it opens the company's form in-app and fills it ----
 const IN_APP = !!window.ReactNativeWebView;
 const APP_ATS = ["comeet","greenhouse","ashby","lever","workable"];
-function formUrlOf(j){ if(!j)return ""; if(j.ats==="comeet") return j.fu||""; return APP_ATS.includes(j.ats)?(j.au||""):""; }
+function formUrlOf(j){ if(!j)return ""; if(j.ats==="comeet") return j.fu||j.au||""; return APP_ATS.includes(j.ats)?(j.au||""):""; }
 function toApp(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
 async function openInApp(j){
   const p=ob.profile;
