@@ -358,16 +358,28 @@ function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old
 const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co","sb_publishable_f2zVbN62xc6rqSrTmKp5Yg_XdlzBoZX");
 let UID=null, GMAIL="";
 // ---- Running inside the Hitch phone app: it opens the company's form in-app and fills it ----
-const IN_APP = !!window.ReactNativeWebView;
+// Inside the app: the app opens the site with ?app=1 (remembered for this visit, also after sign-in redirects),
+// and the app's message channel may appear under either name.
+const IN_APP = (()=>{ try{
+  if(new URLSearchParams(location.search).has("app")) sessionStorage.setItem("hitchApp","1");
+  return sessionStorage.getItem("hitchApp")==="1" || !!window.ReactNativeWebView ||
+    !!(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ReactNativeWebView);
+}catch(e){ return !!window.ReactNativeWebView; } })();
 const APP_ATS = ["comeet","greenhouse","ashby","lever","workable"];
 function formUrlOf(j){ if(!j)return ""; if(j.ats==="comeet") return j.fu||j.au||""; return APP_ATS.includes(j.ats)?(j.au||""):""; }
-function toApp(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
+function toApp(m){
+  const msg=JSON.stringify(m);
+  try{ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(msg); return true; } }catch(e){}
+  try{ const h=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ReactNativeWebView; if(h){ h.postMessage(msg); return true; } }catch(e){}
+  return false;
+}
 async function openInApp(j){
   const p=ob.profile;
   let cvUrl="";
   try{ if(p.cvPath){ const {data}=await SB.storage.from("cvs").createSignedUrl(p.cvPath,600); cvUrl=data&&data.signedUrl||""; } }catch(e){}
-  toApp({type:"open-form",jobId:j.id,url:formUrlOf(j),ats:j.ats,company:j.c,title:j.t,
+  const ok=toApp({type:"open-form",jobId:j.id,url:formUrlOf(j),ats:j.ats,company:j.c,title:j.t,
     data:{first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:p.cvName||"CV.pdf",cvUrl,answers:window.__answers||{}}});
+  if(!ok) toast("Couldn't open the form. Close and reopen the app.");
 }
 // Messages from the app: {type:"sent", jobId} after the company's thank-you page appeared
 window.hitchFromApp=async function(m){
@@ -995,7 +1007,7 @@ $("lgSend").onclick=async()=>{
 $("lgCode").addEventListener("input",()=>{ const v=$("lgCode").value.trim(); if(/^https?:\/\/\S+token=/.test(v)||/^\d{6}$/.test(v)) verifyCode(); });
 // Google: in the app it opens the phone's own sign-in window (Google blocks embedded pages); on the web a normal redirect
 $("lgGoogle").onclick=async()=>{
-  const ret=new URLSearchParams(location.search).get("ret");
+  const ret=null; // the plain redirect works inside the app; the separate sign-in window is kept for later
   if(IN_APP&&ret){
     const {data,error}=await SB.auth.signInWithOAuth({provider:"google",options:{redirectTo:ret,skipBrowserRedirect:true}});
     if(error||!data||!data.url){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in isn't available yet.";return;}
