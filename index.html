@@ -971,10 +971,10 @@ $("lgSend").onclick=async()=>{
   $("lgSend").disabled=true; $("lgErr").textContent="";
   const {error}=await SB.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
   $("lgSend").disabled=false;
-  if(error){$("lgErr").textContent=/signup|not allowed|not found/i.test(error.message)?"This email hasn't been invited yet.":"Something went wrong. Please try again in a minute.";return;}
+  if(error){$("lgErr").style.color="";$("lgErr").textContent=/signup|not allowed|not found/i.test(error.message)?"This email hasn't been invited yet.":/rate|security purposes|seconds|too many/i.test(error.message)?"Too many sign-in emails right now. Please wait a few minutes and try again.":"Something went wrong: "+error.message;return;}
   $("lgErr").style.color="var(--yes)";
   $("lgErr").textContent=IN_APP?"We emailed you a sign-in link. Long-press it in your email, copy, and paste it above.":"Check your inbox for the sign-in link.";
-  $("lgCodeBox").style.display=""; $("lgSend").textContent="Sign in"; $("lgCode").focus();
+  $("lgCodeBox").style.display=""; $("lgSend").textContent="Send a new link"; $("lgCode").value=""; $("lgCode").focus();
 };
 $("lgCode").addEventListener("input",()=>{ const v=$("lgCode").value.trim(); if(/^https?:\/\/\S+token=/.test(v)||/^\d{6}$/.test(v)) verifyCode(); });
 $("signOut").onclick=async()=>{await SB.auth.signOut(); try{localStorage.clear();}catch(e){} location.reload();};
