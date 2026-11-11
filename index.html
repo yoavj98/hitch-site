@@ -203,6 +203,7 @@ header.hide .hdr-right{visibility:hidden}
         <div class="big">Hit<span>ch</span></div>
         <p class="lead">Hitch is invite-only. Enter the email you were invited with and we'll send you a sign-in link.</p>
         <div class="form"><label>Email<input id="lgEmail" type="email" autocomplete="email"></label></div>
+        <div class="form" id="lgCodeBox" style="display:none;margin-top:10px"><label>Paste the sign-in link from the email (or its code)<input id="lgCode" autocomplete="one-time-code"></label></div>
         <div class="err" id="lgErr" style="margin-top:12px"></div>
       </div>
       <div class="spacer"></div>
@@ -353,6 +354,26 @@ function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old
 // ---- account storage: Supabase ----
 const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co","sb_publishable_f2zVbN62xc6rqSrTmKp5Yg_XdlzBoZX");
 let UID=null, GMAIL="";
+// ---- Running inside the Hitch phone app: it opens the company's form in-app and fills it ----
+const IN_APP = !!window.ReactNativeWebView;
+const APP_ATS = ["comeet","greenhouse","ashby","lever","workable"];
+function formUrlOf(j){ if(!j)return ""; if(j.ats==="comeet") return j.fu||""; return APP_ATS.includes(j.ats)?(j.au||""):""; }
+function toApp(m){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(m)); }catch(e){} }
+async function openInApp(j){
+  const p=ob.profile;
+  let cvUrl="";
+  try{ if(p.cvPath){ const {data}=await SB.storage.from("cvs").createSignedUrl(p.cvPath,600); cvUrl=data&&data.signedUrl||""; } }catch(e){}
+  toApp({type:"open-form",jobId:j.id,url:formUrlOf(j),ats:j.ats,company:j.c,title:j.t,
+    data:{first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:p.cvName||"CV.pdf",cvUrl,answers:window.__answers||{}}});
+}
+// Messages from the app: {type:"sent", jobId} after the company's thank-you page appeared
+window.hitchFromApp=async function(m){
+  if(!m||!UID)return;
+  if(m.type==="sent"){
+    await SB.from("applications").update({status:"sent",detail:"Sent from the app"}).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
+    const j=JOBS.find(x=>x.id===m.jobId); toast(`Sent to ${j?j.c:"the company"} ✓`);
+  }
+};
 async function connectGmail(){
   try{
     const {data,error}=await SB.functions.invoke("gmail-connect",{body:{}});
@@ -393,11 +414,14 @@ function applyCloud(d){
     state.yrs=p.yrs??state.yrs;state.gap=p.gap??state.gap;state.unknownYrs=p.unknownYrs!==false;}
   ["likes","nopes","applies"].forEach(k=>{if(Array.isArray(d[k]))store.set(k,d[k]);});
 }
-async function saveSwipe(j,dir){
+async function saveSwipe(j,dir,inAppForm){
   if(!UID)return;
   try{
     await SB.from("swipes").upsert({user_id:UID,job_id:j.id,action:dir});
-    if(dir==="apply"){
+    if(dir==="apply"&&inAppForm){
+      // the app opens the company's form filled in; the user presses Send there
+      await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:formUrlOf(j),status:"queued",detail:"Opened in the app"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
+    } else if(dir==="apply"){
       await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:j.u,status:"queued"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
       // The server waits a few seconds (so Undo still works), then emails the CV from the user's Gmail
       SB.functions.invoke("send-application",{body:{job_id:j.id}}).catch(()=>{});
@@ -571,7 +595,8 @@ const listOf=d=>d==="like"?state.likes:d==="apply"?state.applies:state.nopes;
 let busy=false;
 function swipe(dir){
   if(busy||!state.queue.length)return;
-  if(dir==="apply"&&(!ob.consent||!GMAIL)){askConsent();return;}
+  const inAppForm = dir==="apply" && IN_APP && !!formUrlOf(state.queue[0]);
+  if(dir==="apply"&&!inAppForm&&(!ob.consent||!GMAIL)){askConsent();return;}
   busy=true;
   const card=$("deck").lastElementChild, j=state.queue[0];
   card.classList.add("anim");
@@ -580,8 +605,9 @@ function swipe(dir){
   card.style.opacity=0;
   state.queue.shift(); state.history.push({j,dir});
   listOf(dir).push(j);
-  persist(); saveSwipe(j,dir);
+  persist(); saveSwipe(j,dir,inAppForm);
   if(dir==="like") toast(`Added to wishlist · ${j.c}`);
+  else if(inAppForm) openInApp(j);
   else if(dir==="apply") toast(`Applying to ${j.c} · queued`);
   setTimeout(()=>{busy=false;renderDeck();go("deck");},260);
 }
@@ -898,13 +924,13 @@ renderUnknown();
 $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
 $("startBtn").disabled=true; $("startBtn").style.opacity=.5;
 go("loading");
-const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats";
+const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats,form_url";
 async function loadJobs(){
   const out=[]; for(let from=0;;from+=1000){
     const {data,error}=await SB.from("jobs").select(CARD_COLS).order("first_seen",{ascending:false}).range(from,from+999);
     if(error)throw error; out.push(...data); if(data.length<1000)break; }
   return out.map(r=>({id:r.id,c:r.company,t:r.title,r:r.role||"Other",rs:r.roles||[r.role],ci:r.city||"Israel",rg:r.region||"Other / Unspecified",
-    w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||""}));
+    w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||""}));
 }
 let booted=false;
 async function boot(session){
@@ -926,15 +952,31 @@ async function boot(session){
     window.addEventListener("hashchange",()=>{if(ob.done&&openHashJob()){renderDeck();go("deck");}});
   }catch(e){ document.querySelector("#s-loading .loading").textContent="Couldn't load the jobs. Please refresh the page."; }
 }
+// In the app, the email link would open in the phone's browser, not in the app. So the app signs in with the code from the email.
+async function verifyCode(){
+  const email=$("lgEmail").value.trim(), raw=$("lgCode").value.trim();
+  // Dev path: the pasted email link carries a one-time token (…/auth/v1/verify?token=…&type=magiclink)
+  let linkToken=""; try{ if(/^https?:\/\//.test(raw)) linkToken=new URL(raw).searchParams.get("token")||""; }catch(e){}
+  const token=raw.replace(/\D/g,"");
+  if(!linkToken&&token.length!==6){$("lgErr").style.color="";$("lgErr").textContent="Paste the link from the email, or its 6-digit code.";return;}
+  $("lgSend").disabled=true;
+  const {error}=linkToken?await SB.auth.verifyOtp({token_hash:linkToken,type:"magiclink"}):await SB.auth.verifyOtp({email,token,type:"email"});
+  $("lgSend").disabled=false;
+  if(error){$("lgErr").style.color="";$("lgErr").textContent="That code didn't work. Check it, or send a new one.";}
+}
 $("lgSend").onclick=async()=>{
+  if($("lgCodeBox").style.display!=="none"&&$("lgCode").value.trim()){ return verifyCode(); }
   const email=$("lgEmail").value.trim();
   if(!/^\S+@\S+\.\S+$/.test(email)){$("lgErr").textContent="Please enter a valid email.";return;}
   $("lgSend").disabled=true; $("lgErr").textContent="";
   const {error}=await SB.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
   $("lgSend").disabled=false;
   if(error){$("lgErr").textContent=/signup|not allowed|not found/i.test(error.message)?"This email hasn't been invited yet.":"Something went wrong. Please try again in a minute.";return;}
-  $("lgErr").style.color="var(--yes)"; $("lgErr").textContent="Check your inbox for the sign-in link.";
+  $("lgErr").style.color="var(--yes)";
+  $("lgErr").textContent=IN_APP?"We emailed you a sign-in link. Long-press it in your email, copy, and paste it above.":"Check your inbox for the sign-in link.";
+  $("lgCodeBox").style.display=""; $("lgSend").textContent="Sign in"; $("lgCode").focus();
 };
+$("lgCode").addEventListener("input",()=>{ const v=$("lgCode").value.trim(); if(/^https?:\/\/\S+token=/.test(v)||/^\d{6}$/.test(v)) verifyCode(); });
 $("signOut").onclick=async()=>{await SB.auth.signOut(); try{localStorage.clear();}catch(e){} location.reload();};
 SB.auth.onAuthStateChange((ev,session)=>{ if(session) boot(session); });
 SB.auth.getSession().then(({data})=>{ if(data.session) boot(data.session); else go("login"); });
