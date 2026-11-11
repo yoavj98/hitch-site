@@ -361,7 +361,9 @@ let UID=null, GMAIL="";
 // Inside the app: the app opens the site with ?app=1 (remembered for this visit, also after sign-in redirects),
 // and the app's message channel may appear under either name.
 const IN_APP = (()=>{ try{
-  if(new URLSearchParams(location.search).has("app")) sessionStorage.setItem("hitchApp","1");
+  const qs=new URLSearchParams(location.search);
+  if(qs.has("app")) sessionStorage.setItem("hitchApp","1");
+  if(qs.get("ret")) sessionStorage.setItem("hitchRet",qs.get("ret"));
   return sessionStorage.getItem("hitchApp")==="1" || !!window.ReactNativeWebView ||
     !!(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ReactNativeWebView);
 }catch(e){ return !!window.ReactNativeWebView; } })();
@@ -385,6 +387,11 @@ async function openInApp(j){
 window.hitchFromApp=async function(m){
   if(!m)return;
   if(m.type==="session"){ const {error}=await SB.auth.setSession({access_token:m.access_token,refresh_token:m.refresh_token}); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
+  if(m.type==="restore"){
+    const {data}=await SB.auth.getSession();
+    if(!data.session&&m.refresh_token){ const {error}=await SB.auth.setSession({access_token:m.access_token,refresh_token:m.refresh_token}); if(error) toApp({type:"restore-failed",error:error.message}); }
+    return;
+  }
   if(m.type==="cancelled"){ undoJob(m.jobId); return; }
   if(m.type==="code"){ const {error}=await SB.auth.exchangeCodeForSession(m.code); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
   if(m.type==="login-error"){ $("lgErr").style.color=""; $("lgErr").textContent=/signup|not allowed/i.test(m.error||"")?"This Google account's email hasn't been invited yet.":m.error; return; }
@@ -1007,7 +1014,9 @@ $("lgSend").onclick=async()=>{
 $("lgCode").addEventListener("input",()=>{ const v=$("lgCode").value.trim(); if(/^https?:\/\/\S+token=/.test(v)||/^\d{6}$/.test(v)) verifyCode(); });
 // Google: in the app it opens the phone's own sign-in window (Google blocks embedded pages); on the web a normal redirect
 $("lgGoogle").onclick=async()=>{
-  const ret=null; // the plain redirect works inside the app; the separate sign-in window is kept for later
+  // iPhone app: the plain redirect works inside the app. Android app: Google blocks sign-in inside embedded pages,
+  // so it opens the phone's own sign-in window and returns to the app (hitch://auth).
+  const ret=/Android/i.test(navigator.userAgent)?new URLSearchParams(location.search).get("ret")||sessionStorage.getItem("hitchRet"):null;
   if(IN_APP&&ret){
     const {data,error}=await SB.auth.signInWithOAuth({provider:"google",options:{redirectTo:ret,skipBrowserRedirect:true}});
     if(error||!data||!data.url){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in isn't available yet.";return;}
@@ -1045,8 +1054,14 @@ function setPasswordPage(){
     history.replaceState(null,"",location.pathname); bg.remove(); toast("Password saved. Use it in the app.");
   };
 }
-$("signOut").onclick=async()=>{await SB.auth.signOut(); try{localStorage.clear();}catch(e){} location.reload();};
-SB.auth.onAuthStateChange((ev,session)=>{ if(session) boot(session); });
+$("signOut").onclick=async()=>{window.__hitchUserSignedOut=true; if(IN_APP) toApp({type:"session-clear"}); await SB.auth.signOut(); try{localStorage.clear();}catch(e){} location.reload();};
+SB.auth.onAuthStateChange((ev,session)=>{
+  if(session){
+    boot(session);
+    // the app keeps a copy of the sign-in in the phone's secure storage (survives reloads and updates)
+    if(IN_APP) toApp({type:"session-save",access_token:session.access_token,refresh_token:session.refresh_token});
+  } else if(ev==="SIGNED_OUT"&&IN_APP&&window.__hitchUserSignedOut) toApp({type:"session-clear"});
+});
 SB.auth.getSession().then(({data})=>{ if(data.session) boot(data.session); else go("login"); });
 </script>
 </body>
