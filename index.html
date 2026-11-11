@@ -432,8 +432,7 @@ async function saveSwipe(j,dir,inAppForm){
       await SB.from("applications").update({status:"queued",detail:"Opened in the app"}).eq("job_id",j.id).eq("status","cancelled");
     } else if(dir==="apply"){
       await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:j.u,status:"queued"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
-      // The server waits a few seconds (so Undo still works), then emails the CV from the user's Gmail
-      SB.functions.invoke("send-application",{body:{job_id:j.id}}).catch(()=>{});
+      // Automatic sending by email is turned off (owner's decision, 2026-11-11). Applying happens in the app.
     }
   }catch(e){}
 }
@@ -605,7 +604,7 @@ let busy=false;
 function swipe(dir){
   if(busy||!state.queue.length)return;
   const inAppForm = dir==="apply" && IN_APP && !!formUrlOf(state.queue[0]);
-  if(dir==="apply"&&!inAppForm&&(!ob.consent||!GMAIL)){askConsent();return;}
+  // (Gmail consent step retired: nothing is sent automatically from the website)
   busy=true;
   const card=$("deck").lastElementChild, j=state.queue[0];
   card.classList.add("anim");
@@ -617,7 +616,7 @@ function swipe(dir){
   persist(); saveSwipe(j,dir,inAppForm);
   if(dir==="like") toast(`Added to wishlist · ${j.c}`);
   else if(inAppForm) openInApp(j);
-  else if(dir==="apply") toast(`Applying to ${j.c} · queued`);
+  else if(dir==="apply") toast(IN_APP?`Saved · ${j.c} can't be filled in the app yet`:`Saved · open the Hitch app to apply to ${j.c}`);
   setTimeout(()=>{busy=false;renderDeck();go("deck");},260);
 }
 function undoJob(jobId){
