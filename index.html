@@ -387,6 +387,7 @@ async function openInApp(j){
 window.hitchFromApp=async function(m){
   if(!m)return;
   if(m.type==="session"){ const {error}=await SB.auth.setSession({access_token:m.access_token,refresh_token:m.refresh_token}); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
+  if(m.type==="ping"){ const {data}=await SB.auth.getSession(); toApp({type:"pong",inApp:IN_APP,signedIn:!!data.session}); return; }
   if(m.type==="restore"){
     const {data}=await SB.auth.getSession();
     if(!data.session&&m.refresh_token){ const {error}=await SB.auth.setSession({access_token:m.access_token,refresh_token:m.refresh_token}); if(error) toApp({type:"restore-failed",error:error.message}); }
