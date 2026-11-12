@@ -435,7 +435,7 @@ const IN_APP = (()=>{ try{
   return sessionStorage.getItem("hitchApp")==="1" || !!window.ReactNativeWebView ||
     !!(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ReactNativeWebView);
 }catch(e){ return !!window.ReactNativeWebView; } })();
-const APP_ATS = ["comeet","greenhouse","ashby","lever","workable"];
+const APP_ATS = ["comeet","greenhouse","ashby","lever","workable","elbit","smartrecruiters"];
 function formUrlOf(j){ if(!j)return ""; if(!APP_ATS.includes(j.ats))return ""; return j.fu||j.au||""; } // fu = the ATS form page itself (Comeet, Greenhouse)
 function toApp(m){
   const msg=JSON.stringify(m);
