@@ -81,7 +81,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .applybar .x{background:none;border:none;color:#aaa;font-size:18px;cursor:pointer}
 .alink{display:block;text-align:center;text-decoration:none;flex:1;padding:14px;border-radius:12px;font:700 15px Inter;background:var(--accent);color:#fff}
 .role{overflow-wrap:anywhere}
-.must li{overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.must li{overflow-wrap:anywhere}
 .must{overflow:hidden;flex:1;min-height:0}
 .count{font-size:13px;color:var(--muted);margin-top:6px}
 .must h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px}
@@ -632,7 +632,7 @@ $("startBtn").onclick=()=>{
 function cardHTML(j){
   const fc=fitClass(j);
   const reading=!j.aiDone&&(!aiReady||sampleFn||aiDb)?' <span style="text-transform:none;letter-spacing:0;font-weight:600;color:var(--accent)">· reading the post…</span>':"";
-  const musts=j.m&&j.m.length?`<div class="must"><h4>Must have${reading}</h4><ul>${j.m.slice(0,3).map(m=>`<li dir="auto">${esc(m)}</li>`).join("")}</ul></div>`
+  const musts=j.m&&j.m.length?`<div class="must"><h4>Must have${reading}</h4><ul>${j.m.map(m=>`<li dir="auto">${esc(m)}</li>`).join("")}</ul></div>`
     :`<div class="must"><h4>Must have${reading}</h4><p style="color:var(--muted);font-size:14px">Not listed separately. Open full details to read the post.</p></div>`;
   return `<div class="stamp like">WISHLIST</div><div class="stamp nope">PASS</div><div class="stamp apply">APPLY</div>
   <div class="co"><div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div>
@@ -657,14 +657,17 @@ function mix(list){
 }
 
 // show only whole requirement lines that fit; the rest stay in the full details
+// Requirements are shown in full or not at all: each one that doesn't fit is skipped and the next is tried.
 function fitMusts(card){
   const box=card.querySelector(".must"), ul=box&&box.querySelector("ul"); if(!ul)return;
-  const items=[...ul.children]; let hidden=0;
+  const items=[...ul.children]; ul.innerHTML=""; let hidden=0;
   const fits=()=>box.scrollHeight<=box.clientHeight+1;
-  while(!fits()&&ul.children.length>1){ul.lastElementChild.remove();hidden++;}
-  if(!fits()){ const li=ul.firstElementChild; li.style.webkitLineClamp="1"; }
-  if(hidden){const m=document.createElement("div");m.className="moreReq";m.textContent=`+${hidden} more in full details`;box.appendChild(m);
-    if(!fits()&&ul.children.length>1){ul.lastElementChild.remove();m.textContent=`+${hidden+1} more in full details`;}}
+  const more=document.createElement("div"); more.className="moreReq";
+  for(const li of items){ ul.appendChild(li); if(!fits()){ li.remove(); hidden++; } }
+  if(hidden){
+    more.textContent=`+${hidden} more in full details`; box.appendChild(more);
+    while(!fits()&&ul.children.length){ ul.lastElementChild.remove(); hidden++; more.textContent=`+${hidden} more in full details`; }
+  }
 }
 function renderDeck(){
   const deck=$("deck"); deck.innerHTML="";
