@@ -14,9 +14,24 @@
   function setVal(el, v){
     var proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
-    ['input','change','blur'].forEach(function(t){ el.dispatchEvent(new Event(t, {bubbles:true})); });
+    ['input','change','blur'].forEach(function(t){ el.dispatchEvent(new Event(t, {bubbles:true, composed:true})); });
   }
-  function q(sel){ return document.querySelector(sel); }
+  // Some forms (SmartRecruiters) build their fields inside web components (shadow DOM): search those too.
+  function deepAll(sel, root, out){
+    root = root || document; out = out || [];
+    Array.prototype.push.apply(out, root.querySelectorAll(sel));
+    root.querySelectorAll('*').forEach(function(e){ if (e.shadowRoot) deepAll(sel, e.shadowRoot, out); });
+    return out;
+  }
+  function q(sel){ return document.querySelector(sel) || deepAll(sel)[0] || null; }
+  function upOne(e){ return e.parentElement || (e.getRootNode && e.getRootNode().host) || null; }
+  // text of the nearest surrounding block that says something (crosses shadow DOM boundaries)
+  function nearText(e, min){
+    for (var x = upOne(e), k = 0; x && k < 14; x = upOne(x), k++) {
+      var t = (x.innerText || '').trim(); if (t.length >= (min || 4)) return t;
+    }
+    return '';
+  }
   function dummyPdf(){
     var s = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF';
     return new Blob([s], {type:'application/pdf'});
@@ -115,9 +130,10 @@
   // Forms without field names (Elbit, SmartRecruiters, ...): find the field by its label, placeholder or type.
   function textOf(el){
     var parts = [el.getAttribute('aria-label'), el.placeholder, el.name, el.id, el.getAttribute('autocomplete')];
-    if (el.id) { var l = document.querySelector('label[for="'+CSS.escape(el.id)+'"]'); if (l) parts.push(l.innerText); }
+    var root = el.getRootNode && el.getRootNode().querySelector ? el.getRootNode() : document;
+    if (el.id) { var l = root.querySelector('label[for="'+CSS.escape(el.id)+'"]'); if (l) parts.push(l.innerText); }
     var lb = el.getAttribute('aria-labelledby');
-    if (lb) lb.split(' ').forEach(function(i){ var x = document.getElementById(i); if (x) parts.push(x.innerText); });
+    if (lb) lb.split(' ').forEach(function(i){ var x = root.querySelector('#'+CSS.escape(i)); if (x) parts.push(x.innerText); });
     var c = el.closest('label'); if (c) parts.push(c.innerText);
     var box = el.parentElement;
     for (var k = 0; k < 3 && box; k++, box = box.parentElement) {
@@ -127,14 +143,14 @@
     return parts.filter(Boolean).join(' | ');
   }
   function visibleInputs(){
-    return Array.prototype.filter.call(document.querySelectorAll('input,textarea'), function(el){
+    return deepAll('input,textarea').filter(function(el){
       var t = (el.type||'text').toLowerCase();
-      return ['text','email','tel','','textarea'].indexOf(t) >= 0 && !el.disabled && el.offsetParent !== null;
+      return ['text','email','tel','','textarea'].indexOf(t) >= 0 && !el.disabled && el.getClientRects().length > 0;
     });
   }
   var LABELS = {
-    first: /first ?name|given name|שם פרטי/i,
-    last: /last ?name|family name|surname|שם משפחה/i,
+    first: /first[ _-]?name|given name|שם פרטי/i,
+    last: /last[ _-]?name|family name|surname|שם משפחה/i,
     name: /full ?name|^\s*name\b|your name|שם מלא|^\s*שם\s*\*?\s*$/i,
     email: /e-?mail|אימייל|מייל|דוא"?ל/i,
     phone: /phone|mobile|cell|טלפון|נייד/i
@@ -182,10 +198,14 @@
       } catch(e) { post({type:'log', msg:'country error '+e}); }
     }
     var file = q('input[type=file][name=cv],input[type=file]#resume,input[type=file][name=resume],input[type=file][id*=resume i],input[type=file][name*=resume i]');
-    if (!file) { // otherwise: the file box whose label talks about a resume / CV, or the only file box on the page
-      var files = document.querySelectorAll('input[type=file]');
-      file = Array.prototype.find.call(files, function(x){ var c = x.closest('div,fieldset,label'); return c && /resume|cv|קורות/i.test(c.innerText||''); }) || (files.length === 1 ? files[0] : null);
+    if (!file) { // otherwise: the document file box whose label talks about a resume / CV, or the only / last one
+      var files = deepAll('input[type=file]').filter(function(x){
+        var a = (x.accept || '').toLowerCase(); return !a || /pdf|doc|\*/.test(a); }); // skip photo-only boxes
+      file = files.find(function(x){ var t = nearText(x, 20); return /resume|\bcv\b|curriculum|קורות/i.test(t) && !/autocomplete|easy apply|indeed/i.test(t); })
+        || (files.length === 1 ? files[0] : files[files.length - 1]) || null;
     }
+    // a second "confirm e-mail" field
+    deepAll('input[type=email]').forEach(function(x){ if (!x.value && x.getClientRects().length) setVal(x, D.email); });
     if (file) res.cv = attach(file);
     var fileShown = document.body.innerText.indexOf(D.cvName) >= 0;
     res.cvShown = fileShown;
