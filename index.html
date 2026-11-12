@@ -410,20 +410,30 @@ const IN_APP = (()=>{ try{
     !!(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ReactNativeWebView);
 }catch(e){ return !!window.ReactNativeWebView; } })();
 const APP_ATS = ["comeet","greenhouse","ashby","lever","workable"];
-function formUrlOf(j){ if(!j)return ""; if(j.ats==="comeet") return j.fu||j.au||""; return APP_ATS.includes(j.ats)?(j.au||""):""; }
+function formUrlOf(j){ if(!j)return ""; if(!APP_ATS.includes(j.ats))return ""; return j.fu||j.au||""; } // fu = the ATS form page itself (Comeet, Greenhouse)
 function toApp(m){
   const msg=JSON.stringify(m);
   try{ if(window.ReactNativeWebView){ window.ReactNativeWebView.postMessage(msg); return true; } }catch(e){}
   try{ const h=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ReactNativeWebView; if(h){ h.postMessage(msg); return true; } }catch(e){}
   return false;
 }
-async function openInApp(j,cv){
+async function formMsg(type,j,cv){
   const p=ob.profile; cv=cv||defaultCv()||{path:p.cvPath,name:p.cvName};
   let cvUrl="";
   try{ if(cv.path){ const {data}=await SB.storage.from("cvs").createSignedUrl(cv.path,600); cvUrl=data&&data.signedUrl||""; } }catch(e){}
   const fill=!!formUrlOf(j);
-  const ok=toApp({type:"open-form",jobId:j.id,url:formUrlOf(j)||j.au||j.u,fill,ats:j.ats,company:j.c,title:j.t,
-    data:{first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:cv.name||"CV.pdf",cvUrl,answers:window.__answers||{}}});
+  return {type,jobId:j.id,url:formUrlOf(j)||j.au||j.u,fill,ats:j.ats,company:j.c,title:j.t,
+    data:{first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:cv.name||"CV.pdf",cvUrl,answers:window.__answers||{}}};
+}
+// the app loads and fills the top card's form in the background, so a swipe up shows it at once
+let preloadT=null;
+function postPreload(){
+  if(!IN_APP||!UID)return;
+  clearTimeout(preloadT);
+  preloadT=setTimeout(async()=>{ const j=state.queue[0]; if(j&&(j.au||j.u)) toApp(await formMsg("preload",j)); },400);
+}
+async function openInApp(j,cv){
+  const ok=toApp(await formMsg("open-form",j,cv));
   if(!ok) toast("Couldn't open the form. Close and reopen the app.");
 }
 // Messages from the app: {type:"sent", jobId} after the company's thank-you page appeared
@@ -437,6 +447,12 @@ window.hitchFromApp=async function(m){
     return;
   }
   if(m.type==="cancelled"){ undoJob(m.jobId); return; }
+  if(m.type==="form-closed"){ postPreload(); return; }
+  if(m.type==="save-answers"&&m.answers&&UID){
+    window.__answers=Object.assign({},window.__answers||{},m.answers);
+    await SB.from("profiles").update({answers:window.__answers}).eq("id",UID);
+    return;
+  }
   if(m.type==="code"){ const {error}=await SB.auth.exchangeCodeForSession(m.code); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
   if(m.type==="login-error"){ $("lgErr").style.color=""; $("lgErr").textContent=/signup|not allowed/i.test(m.error||"")?"This Google account's email hasn't been invited yet.":m.error; return; }
   if(!UID)return;
@@ -664,6 +680,7 @@ function renderDeck(){
     fitMusts(c);
   });
   setTimeout(prefetchAi,0);
+  postPreload();
 }
 
 function attachDrag(card,job){
@@ -720,6 +737,7 @@ function advanceDeck(flying){
     requestAnimationFrame(()=>{ c.classList.add("anim"); c.style.opacity=""; });
   }
   setTimeout(()=>{ busy=false; }, 120);           // next swipe allowed almost at once
+  postPreload();
   setTimeout(()=>{ flying.remove(); next.classList.remove("anim"); setTimeout(prefetchAi,0); }, 340);
   if(!$("s-deck").classList.contains("active")) go("deck");
 }
