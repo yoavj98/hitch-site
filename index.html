@@ -375,6 +375,7 @@ function logoNext(img){
 }
 function logoLoaded(img){
   const w=img.naturalWidth;
+  if(img.dataset.i==="-1") return;   // logo from the company's own site, already checked to be sharp
   if(+img.dataset.i===99){ if(w<32) img.remove(); return; }
   if(w>=64) return;
   if(w>=32&&!img.dataset.fallback) img.dataset.fallback=img.src;
@@ -383,7 +384,8 @@ function logoLoaded(img){
 function logoHTML(j){
   if(!j.dom) return "";
   const d=encodeURIComponent(j.dom);
-  return `<img class="logo-img" alt="" loading="lazy" referrerpolicy="no-referrer" data-dom="${d}" data-i="0" src="${LOGO_SRC[0](d)}" onload="logoLoaded(this)" onerror="logoNext(this)">`;
+  const first=j.lg?esc(j.lg):LOGO_SRC[0](d);
+  return `<img class="logo-img" alt="" loading="lazy" referrerpolicy="no-referrer" data-dom="${d}" data-i="${j.lg?-1:0}" src="${first}" onload="logoLoaded(this)" onerror="logoNext(this)">`;
 }
 // ---- Several CVs: profiles.cvs = [{id,label,name,path}]; the default one is also kept in cv_path / cv_name ----
 let CVS=[];
@@ -1090,13 +1092,13 @@ renderUnknown();
 $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
 $("startBtn").disabled=true; $("startBtn").style.opacity=.5;
 go("loading");
-const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats,form_url,domain";
+const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats,form_url,domain,logo";
 async function loadJobs(){
   const out=[]; for(let from=0;;from+=1000){
     const {data,error}=await SB.from("jobs").select(CARD_COLS).order("first_seen",{ascending:false}).range(from,from+999);
     if(error)throw error; out.push(...data); if(data.length<1000)break; }
   return out.map(r=>({id:r.id,c:r.company,t:r.title,r:r.role||"Other",rs:r.roles||[r.role],ci:r.city||"Israel",rg:r.region||"Other / Unspecified",
-    w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||"",dom:r.domain||""}));
+    w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||"",dom:r.domain||"",lg:r.logo||""}));
 }
 let booted=false;
 async function boot(session){
