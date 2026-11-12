@@ -364,10 +364,25 @@ function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old
 const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co","sb_publishable_f2zVbN62xc6rqSrTmKp5Yg_XdlzBoZX");
 let UID=null, GMAIL="";
 // Company logo = the icon of the company's own website. No logo -> nothing (just the name), never a made-up letter square.
+// Sources in order; a source is accepted when its image is at least 64px (sharp), the last pass accepts 32px.
+const LOGO_SRC=[d=>`https://www.google.com/s2/favicons?domain=${d}&sz=128`, d=>`https://icon.horse/icon/${d}`, d=>`https://${d}/apple-touch-icon.png`];
+function logoNext(img){
+  const d=img.dataset.dom; let i=+img.dataset.i+1;
+  if(i<LOGO_SRC.length){ img.dataset.i=i; img.src=LOGO_SRC[i](d); return; }
+  if(img.dataset.fallback){ img.dataset.i=99; img.src=img.dataset.fallback; img.dataset.fallback=""; return; }
+  img.remove();
+}
+function logoLoaded(img){
+  const w=img.naturalWidth;
+  if(+img.dataset.i===99){ if(w<32) img.remove(); return; }
+  if(w>=64) return;
+  if(w>=32&&!img.dataset.fallback) img.dataset.fallback=img.src;
+  logoNext(img);
+}
 function logoHTML(j){
   if(!j.dom) return "";
   const d=encodeURIComponent(j.dom);
-  return `<img class="logo-img" alt="" loading="lazy" referrerpolicy="no-referrer" src="https://www.google.com/s2/favicons?domain=${d}&sz=128" onload="if(this.naturalWidth<32)this.remove()" onerror="this.remove()">`;
+  return `<img class="logo-img" alt="" loading="lazy" referrerpolicy="no-referrer" data-dom="${d}" data-i="0" src="${LOGO_SRC[0](d)}" onload="logoLoaded(this)" onerror="logoNext(this)">`;
 }
 // ---- Several CVs: profiles.cvs = [{id,label,name,path}]; the default one is also kept in cv_path / cv_name ----
 let CVS=[];
