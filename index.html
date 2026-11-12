@@ -127,6 +127,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .saved h1{font-size:24px;letter-spacing:-.02em;margin:6px 4px 14px}
 .row{background:var(--surface);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;margin-bottom:10px;cursor:pointer}
 .row .logo-sq{width:40px;height:40px;font-size:15px}
+.logo-img{width:46px;height:46px;border-radius:12px;object-fit:contain;background:#fff;border:1px solid var(--line);padding:5px;flex:none}
+.row .logo-img{width:40px;height:40px;padding:4px}
 .row .t{font-weight:700;font-size:15px}
 .row .s{color:var(--muted);font-size:13px}
 .row .y{margin-left:auto;font-weight:800;font-size:13px;white-space:nowrap}
@@ -361,6 +363,12 @@ function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old
 // ---- account storage: Supabase ----
 const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co","sb_publishable_f2zVbN62xc6rqSrTmKp5Yg_XdlzBoZX");
 let UID=null, GMAIL="";
+// Company logo = the icon of the company's own website. No logo -> nothing (just the name), never a made-up letter square.
+function logoHTML(j){
+  if(!j.dom) return "";
+  const d=encodeURIComponent(j.dom);
+  return `<img class="logo-img" alt="" loading="lazy" referrerpolicy="no-referrer" src="https://www.google.com/s2/favicons?domain=${d}&sz=128" onload="if(this.naturalWidth<32)this.remove()" onerror="this.remove()">`;
+}
 // ---- Several CVs: profiles.cvs = [{id,label,name,path}]; the default one is also kept in cv_path / cv_name ----
 let CVS=[];
 function defaultCv(){ const p=ob.profile; return CVS.find(c=>c.path===p.cvPath)||CVS[0]||null; }
@@ -635,7 +643,7 @@ function cardHTML(j){
   const musts=j.m&&j.m.length?`<div class="must"><h4>Must have${reading}</h4><ul>${j.m.map(m=>`<li dir="auto">${esc(m)}</li>`).join("")}</ul></div>`
     :`<div class="must"><h4>Must have${reading}</h4><p style="color:var(--muted);font-size:14px">Not listed separately. Open full details to read the post.</p></div>`;
   return `<div class="stamp like">WISHLIST</div><div class="stamp nope">PASS</div><div class="stamp apply">APPLY</div>
-  <div class="co"><div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div>
+  <div class="co">${logoHTML(j)}
     <div><div class="co-name">${esc(j.c)}</div><div class="co-meta">${esc(j.r)}</div></div></div>
   <div class="role${j.t.length>45?" long":""}" dir="auto">${esc(j.t)}</div>
   <div class="loc"><span class="pill">📍 ${esc(j.ci)}</span>${j.w?`<span class="pill">${esc(j.w)}</span>`:""}</div>
@@ -775,7 +783,7 @@ let sheetJob=null, sheetFromSaved=false;
 function openSheet(j,fromSaved){
   sheetJob=j;
   $("sheetBody").innerHTML=`
-   <div class="co" style="margin:4px 0 0"><div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div>
+   <div class="co" style="margin:4px 0 0">${logoHTML(j)}
     <div><div class="co-name">${esc(j.c)}</div><div class="co-meta">${esc(j.s||j.r)}</div></div></div>
    <h2 dir="auto">${esc(j.t)}</h2>
    <div class="facts">
@@ -866,7 +874,7 @@ function renderSaved(t){
   $("savedList").innerHTML=(list.length?"":`<div style="color:var(--muted);padding:20px 4px">Nothing here yet.</div>`);
   list.slice().reverse().forEach(j=>{
     const r=document.createElement("div");r.className="row";
-    r.innerHTML=`<div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div><div style="min-width:0"><div class="t" dir="auto">${esc(j.t)}</div><div class="s">${esc(j.c)} · ${esc(j.ci)}${t==="apply"&&(window.__appCv||{})[j.id]?` · CV: ${esc(window.__appCv[j.id])}`:""}</div></div><div class="y">${t==="apply"?statusLabel(stat[j.id]):(j.y==null?"?":j.y===0?"Entry":j.y+"+ yrs")}</div>`;
+    r.innerHTML=`${logoHTML(j)}<div style="min-width:0"><div class="t" dir="auto">${esc(j.t)}</div><div class="s">${esc(j.c)} · ${esc(j.ci)}${t==="apply"&&(window.__appCv||{})[j.id]?` · CV: ${esc(window.__appCv[j.id])}`:""}</div></div><div class="y">${t==="apply"?statusLabel(stat[j.id]):(j.y==null?"?":j.y===0?"Entry":j.y+"+ yrs")}</div>`;
     r.onclick=()=>openSheet(j,true); $("savedList").appendChild(r);
   });
 }
@@ -1066,13 +1074,13 @@ renderUnknown();
 $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
 $("startBtn").disabled=true; $("startBtn").style.opacity=.5;
 go("loading");
-const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats,form_url";
+const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats,form_url,domain";
 async function loadJobs(){
   const out=[]; for(let from=0;;from+=1000){
     const {data,error}=await SB.from("jobs").select(CARD_COLS).order("first_seen",{ascending:false}).range(from,from+999);
     if(error)throw error; out.push(...data); if(data.length<1000)break; }
   return out.map(r=>({id:r.id,c:r.company,t:r.title,r:r.role||"Other",rs:r.roles||[r.role],ci:r.city||"Israel",rg:r.region||"Other / Unspecified",
-    w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||""}));
+    w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||"",dom:r.domain||""}));
 }
 let booted=false;
 async function boot(session){
