@@ -628,8 +628,9 @@ function swipe(dir){
   const inAppForm = dir==="apply" && IN_APP && !!(formUrlOf(state.queue[0])||state.queue[0].au||state.queue[0].u);
   // (Gmail consent step retired: nothing is sent automatically from the website)
   busy=true;
-  const card=$("deck").lastElementChild, j=state.queue[0];
-  card.classList.add("anim");
+  const card=topCard(), j=state.queue[0];
+  if(!card){busy=false;return;}
+  card.classList.add("anim","flying");
   card.querySelector(".stamp."+(dir==="like"?"like":dir==="apply"?"apply":"nope")).style.opacity=1;
   card.style.transform=dir==="apply"?"translate(0,-900px)":`translate(${dir==="like"?600:-600}px,40px) rotate(${dir==="like"?28:-28}deg)`;
   card.style.opacity=0;
@@ -639,7 +640,24 @@ function swipe(dir){
   if(dir==="like") toast(`Added to wishlist · ${j.c}`);
   else if(inAppForm) openInApp(j);
   else if(dir==="apply") toast(IN_APP?`Saved · ${j.c} can't be filled in the app yet`:`Saved · open the Hitch app to apply to ${j.c}`);
-  setTimeout(()=>{busy=false;renderDeck();go("deck");},260);
+  card.style.pointerEvents="none";
+  advanceDeck(card);
+}
+// Smooth move to the next card: the card behind grows into place right away and is ready to swipe,
+// a new card slides in behind it, and the old card is removed after it finishes flying out.
+function advanceDeck(flying){
+  const deck=$("deck"), next=deck.querySelector(".card.under");
+  if(!next||!state.queue.length){ setTimeout(()=>{busy=false;renderDeck();},320); return; }
+  next.classList.add("anim"); next.classList.remove("under");
+  attachDrag(next,state.queue[0]);
+  if(state.queue[1]){
+    const c=document.createElement("div"); c.className="card under"; c.innerHTML=cardHTML(state.queue[1]);
+    c.style.opacity="0"; deck.insertBefore(c,next); fitMusts(c);
+    requestAnimationFrame(()=>{ c.classList.add("anim"); c.style.opacity=""; });
+  }
+  setTimeout(()=>{ busy=false; }, 120);           // next swipe allowed almost at once
+  setTimeout(()=>{ flying.remove(); next.classList.remove("anim"); setTimeout(prefetchAi,0); }, 340);
+  if(!$("s-deck").classList.contains("active")) go("deck");
 }
 function undoJob(jobId){
   const i=state.history.map(h=>h.j.id).lastIndexOf(jobId); if(i<0)return;
@@ -841,8 +859,10 @@ async function prefetchAi(){
   } finally {prefetching=false;}
   if(state.queue.slice(0,3).some(j=>!j.aiDone&&(sampleFn||aiDb))&&$("s-deck").classList.contains("active")) setTimeout(prefetchAi,500);
 }
+// the card the user is looking at (a card that is still flying out doesn't count)
+function topCard(){ return [...$("deck").querySelectorAll(".card:not(.under):not(.flying)")].pop()||null; }
 function refreshTop(){
-  const top=$("deck").lastElementChild;
+  const top=topCard();
   if(busy||!top||top.classList.contains("dragging")||!$("s-deck").classList.contains("active"))return;
   renderDeck();
 }
@@ -855,7 +875,7 @@ function askConsent(){
   $("consentYes").textContent=GMAIL?"Yes, apply":"Connect Gmail & apply";
   $("consentBg").classList.add("open");
   // reset any half-dragged card
-  const c=$("deck").lastElementChild; if(c&&c.classList.contains("card")){c.classList.add("anim");c.style.transform="";c.querySelectorAll(".stamp").forEach(x=>x.style.opacity=0);}
+  const c=topCard(); if(c&&c.classList.contains("card")){c.classList.add("anim");c.style.transform="";c.querySelectorAll(".stamp").forEach(x=>x.style.opacity=0);}
 }
 $("consentNo").onclick=()=>$("consentBg").classList.remove("open");
 $("consentYes").onclick=async()=>{
