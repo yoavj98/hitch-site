@@ -365,7 +365,8 @@ const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co"
 let UID=null, GMAIL="";
 // Company logo = the icon of the company's own website. No logo -> nothing (just the name), never a made-up letter square.
 // Sources in order; a source is accepted when its image is at least 64px (sharp), the last pass accepts 32px.
-const LOGO_SRC=[d=>`https://www.google.com/s2/favicons?domain=${d}&sz=128`, d=>`https://icon.horse/icon/${d}`, d=>`https://${d}/apple-touch-icon.png`];
+// (icon.horse was tried and dropped: when it finds no logo it invents a letter image, indistinguishable from a real logo)
+const LOGO_SRC=[d=>`https://www.google.com/s2/favicons?domain=${d}&sz=128`, d=>`https://${d}/apple-touch-icon.png`];
 function logoNext(img){
   const d=img.dataset.dom; let i=+img.dataset.i+1;
   if(i<LOGO_SRC.length){ img.dataset.i=i; img.src=LOGO_SRC[i](d); return; }
