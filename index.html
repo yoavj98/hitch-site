@@ -273,6 +273,10 @@ header.hide .hdr-right{visibility:hidden}
       <div class="field"><label class="t">Work mode</label><div class="chips" id="c-mode"></div></div>
       <div class="field"><label class="t">Hide jobs that ask for more than</label><div class="chips" id="c-gap"></div></div>
       <div class="field"><label class="t">Jobs that don't state years</label><div class="chips" id="c-unk"></div></div>
+      <div class="field" id="cvsField"><label class="t">My CVs</label>
+        <div id="cvList"></div>
+        <label class="iconbtn" style="display:inline-block;margin-top:8px;cursor:pointer">+ Add a CV<input type="file" id="cvAdd" accept=".pdf,.doc,.docx" hidden></label>
+        <p class="sub">With more than one CV, a swipe up asks which one to send.</p></div>
       <button class="link" id="signOut" style="background:none;border:none;color:var(--muted);font:600 14px Inter;cursor:pointer;margin:0 0 16px 14px;padding:0;float:right">Sign out</button><button class="link" id="editProfile" style="background:none;border:none;color:var(--accent);font:600 14px Inter;cursor:pointer;margin-bottom:16px;padding:0">Edit my details and CV</button>
       <div class="err" id="setupErr"></div>
       <button class="primary" id="startBtn">Start swiping</button>
@@ -357,6 +361,44 @@ function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old
 // ---- account storage: Supabase ----
 const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co","sb_publishable_f2zVbN62xc6rqSrTmKp5Yg_XdlzBoZX");
 let UID=null, GMAIL="";
+// ---- Several CVs: profiles.cvs = [{id,label,name,path}]; the default one is also kept in cv_path / cv_name ----
+let CVS=[];
+function defaultCv(){ const p=ob.profile; return CVS.find(c=>c.path===p.cvPath)||CVS[0]||null; }
+async function saveCvs(){
+  if(!UID)return;
+  const d=defaultCv();
+  if(d){ ob.profile.cvPath=d.path; ob.profile.cvName=d.name; store.set("ob",ob); }
+  await SB.from("profiles").update({cvs:CVS,cv_path:d?d.path:null,cv_name:d?d.name:null,updated_at:new Date().toISOString()}).eq("id",UID);
+}
+function renderCvs(){
+  const box=$("cvList"); if(!box)return;
+  const d=defaultCv();
+  box.innerHTML=CVS.length?"":`<div class="sub">No CV yet.</div>`;
+  CVS.forEach(c=>{
+    const row=document.createElement("div");
+    row.style.cssText="display:flex;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;margin-top:8px;background:var(--surface)";
+    row.innerHTML=`<input value="${esc(c.label)}" aria-label="CV name" style="flex:1;min-width:0;border:none;background:none;font:700 15px Inter;color:var(--ink)">
+      <span style="color:var(--muted);font-size:12px;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span>
+      ${c===d?`<span style="font-size:12px;font-weight:700;color:var(--yes)">Default</span>`:`<button data-def style="border:none;background:var(--chip);border-radius:8px;padding:5px 8px;font:600 12px Inter;cursor:pointer">Make default</button>`}
+      ${CVS.length>1?`<button data-del aria-label="Delete" style="border:none;background:none;color:var(--no);font:700 16px Inter;cursor:pointer">✕</button>`:""}`;
+    row.querySelector("input").onchange=e=>{ c.label=e.target.value.trim()||c.label; saveCvs(); };
+    const def=row.querySelector("[data-def]"); if(def) def.onclick=()=>{ ob.profile.cvPath=c.path; saveCvs().then(renderCvs); };
+    const del=row.querySelector("[data-del]"); if(del) del.onclick=async()=>{
+      if(!confirm(`Delete "${c.label}"?`))return;
+      CVS=CVS.filter(x=>x!==c); await SB.storage.from("cvs").remove([c.path]); await saveCvs(); renderCvs(); };
+    box.appendChild(row);
+  });
+}
+async function addCv(file){
+  if(!UID||!file)return;
+  const ext=(file.name.match(/\.(pdf|docx?)$/i)||[,"pdf"])[1].toLowerCase();
+  const id=Math.random().toString(36).slice(2,8);
+  const path=`${UID}/cv-${id}.${ext}`;
+  const r=await SB.storage.from("cvs").upload(path,file,{upsert:false,contentType:file.type||undefined});
+  if(r.error){ toast("Couldn't upload the CV, please try again"); return; }
+  const label=file.name.replace(/\.[^.]+$/,"").slice(0,40);
+  CVS.push({id,label,name:file.name,path}); await saveCvs(); renderCvs(); toast("CV added");
+}
 // ---- Running inside the Hitch phone app: it opens the company's form in-app and fills it ----
 // Inside the app: the app opens the site with ?app=1 (remembered for this visit, also after sign-in redirects),
 // and the app's message channel may appear under either name.
@@ -375,13 +417,13 @@ function toApp(m){
   try{ const h=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.ReactNativeWebView; if(h){ h.postMessage(msg); return true; } }catch(e){}
   return false;
 }
-async function openInApp(j){
-  const p=ob.profile;
+async function openInApp(j,cv){
+  const p=ob.profile; cv=cv||defaultCv()||{path:p.cvPath,name:p.cvName};
   let cvUrl="";
-  try{ if(p.cvPath){ const {data}=await SB.storage.from("cvs").createSignedUrl(p.cvPath,600); cvUrl=data&&data.signedUrl||""; } }catch(e){}
+  try{ if(cv.path){ const {data}=await SB.storage.from("cvs").createSignedUrl(cv.path,600); cvUrl=data&&data.signedUrl||""; } }catch(e){}
   const fill=!!formUrlOf(j);
   const ok=toApp({type:"open-form",jobId:j.id,url:formUrlOf(j)||j.au||j.u,fill,ats:j.ats,company:j.c,title:j.t,
-    data:{first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:p.cvName||"CV.pdf",cvUrl,answers:window.__answers||{}}});
+    data:{first:p.first,last:p.last,email:p.email,phone:p.phone,cvName:cv.name||"CV.pdf",cvUrl,answers:window.__answers||{}}});
   if(!ok) toast("Couldn't open the form. Close and reopen the app.");
 }
 // Messages from the app: {type:"sent", jobId} after the company's thank-you page appeared
@@ -425,7 +467,10 @@ async function cloudSaveCv(file){
   const ext=(file.name.match(/\.(pdf|docx?|DOCX?|PDF)$/)||[,"pdf"])[1].toLowerCase();
   const path=UID+"/cv."+ext;
   const r=await SB.storage.from("cvs").upload(path,file,{upsert:true,contentType:file.type||undefined});
-  if(!r.error){ob.profile.cvPath=path;cloudSoon();} else toast("Couldn't upload the CV, please try again");
+  if(!r.error){ob.profile.cvPath=path;
+    const m=CVS.find(c=>c.path===path); if(m) m.name=file.name; else CVS.unshift({id:"main",label:"My CV",name:file.name,path});
+    cloudSoon(); saveCvs();
+  } else toast("Couldn't upload the CV, please try again");
 }
 async function cloudLoad(){
   const [{data:pr},{data:sw}]=await Promise.all([
@@ -433,7 +478,8 @@ async function cloudLoad(){
     SB.from("swipes").select("job_id,action")]);
   const d={likes:[],nopes:[],applies:[]};
   (sw||[]).forEach(r=>{(r.action==="like"?d.likes:r.action==="apply"?d.applies:d.nopes).push(r.job_id);});
-  if(pr){ GMAIL=pr.gmail_email||""; window.__answers=pr.answers||{}; d.ob={done:pr.onboarded,consent:pr.apply_consent,profile:{first:pr.first_name||"",last:pr.last_name||"",email:pr.email||"",phone:pr.phone||"",years:pr.years,cvName:pr.cv_name||"",cvPath:pr.cv_path||""}}; d.prefs=pr.prefs&&Object.keys(pr.prefs).length?pr.prefs:null; }
+  if(pr){ GMAIL=pr.gmail_email||""; window.__answers=pr.answers||{};
+    CVS=Array.isArray(pr.cvs)&&pr.cvs.length?pr.cvs:(pr.cv_path?[{id:"main",label:"My CV",name:pr.cv_name||"CV.pdf",path:pr.cv_path}]:[]); d.ob={done:pr.onboarded,consent:pr.apply_consent,profile:{first:pr.first_name||"",last:pr.last_name||"",email:pr.email||"",phone:pr.phone||"",years:pr.years,cvName:pr.cv_name||"",cvPath:pr.cv_path||""}}; d.prefs=pr.prefs&&Object.keys(pr.prefs).length?pr.prefs:null; }
   return d;
 }
 function applyCloud(d){
@@ -443,14 +489,29 @@ function applyCloud(d){
     state.yrs=p.yrs??state.yrs;state.gap=p.gap??state.gap;state.unknownYrs=p.unknownYrs!==false;}
   ["likes","nopes","applies"].forEach(k=>{if(Array.isArray(d[k]))store.set(k,d[k]);});
 }
-async function saveSwipe(j,dir,inAppForm){
+// "Which CV for this job?" - shown after a swipe up when there is more than one CV
+function pickCv(j){
+  const bg=document.createElement("div"); bg.id="cvPick";
+  bg.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center";
+  const d=defaultCv();
+  bg.innerHTML=`<div style="background:var(--surface);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 18px 28px">
+    <div style="font:800 18px Inter;margin-bottom:4px">Which CV for ${esc(j.c)}?</div>
+    <div style="color:var(--muted);font-size:14px;margin-bottom:12px" dir="auto">${esc(j.t)}</div>
+    ${CVS.map((c,i)=>`<button data-i="${i}" style="display:block;width:100%;text-align:left;padding:14px;margin-bottom:8px;border:1px solid var(--line);border-radius:14px;background:${c===d?"#eef3ff":"var(--surface)"};font:700 16px Inter;cursor:pointer">${esc(c.label)}<span style="display:block;font:500 12px Inter;color:var(--muted);margin-top:2px">${esc(c.name)}${c===d?" · default":""}</span></button>`).join("")}
+    <button data-cancel style="display:block;width:100%;padding:13px;border:none;border-radius:14px;background:var(--chip);font:700 15px Inter;cursor:pointer;margin-top:4px">Cancel</button></div>`;
+  document.body.appendChild(bg);
+  bg.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{ const cv=CVS[+b.dataset.i]; bg.remove(); saveSwipe(j,"apply",true,cv); openInApp(j,cv); });
+  bg.querySelector("[data-cancel]").onclick=()=>{ bg.remove(); undoJob(j.id); };
+}
+async function saveSwipe(j,dir,inAppForm,cv){
   if(!UID)return;
   try{
     await SB.from("swipes").upsert({user_id:UID,job_id:j.id,action:dir});
     if(dir==="apply"&&inAppForm){
       // the app opens the company's form filled in; the user presses Send there
-      await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:formUrlOf(j)||j.au||j.u,status:"queued",detail:"Opened in the app"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
-      await SB.from("applications").update({status:"queued",detail:"Opened in the app"}).eq("job_id",j.id).eq("status","cancelled");
+      const cvLabel=cv?cv.label:null;
+      await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:formUrlOf(j)||j.au||j.u,status:"queued",detail:"Opened in the app",cv_label:cvLabel},{onConflict:"user_id,job_id",ignoreDuplicates:true});
+      await SB.from("applications").update({status:"queued",detail:"Opened in the app",cv_label:cvLabel}).eq("job_id",j.id).eq("status","cancelled");
     } else if(dir==="apply"){
       await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:j.u,status:"queued"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
       // Automatic sending by email is turned off (owner's decision, 2026-11-11). Applying happens in the app.
@@ -522,6 +583,7 @@ function updateCount(){ if(!JOBS.length)return; const n=filtered().length;
 
 const OB_SCREENS=["loading","login","welcome","cv","confirm","how"];
 function go(screen){
+  if(screen==="setup") renderCvs();
   document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("active",s.id==="s-"+screen));
   document.querySelector("header").classList.toggle("hide",OB_SCREENS.includes(screen)||(screen==="setup"&&!ob.done));
   $("setupDots").style.display=ob.done?"none":"flex";
@@ -636,9 +698,11 @@ function swipe(dir){
   card.style.opacity=0;
   state.queue.shift(); state.history.push({j,dir});
   listOf(dir).push(j);
-  persist(); saveSwipe(j,dir,inAppForm);
+  persist();
+  if(inAppForm&&CVS.length>1){ card.style.pointerEvents="none"; advanceDeck(card); pickCv(j); return; }
+  saveSwipe(j,dir,inAppForm,defaultCv());
   if(dir==="like") toast(`Added to wishlist · ${j.c}`);
-  else if(inAppForm) openInApp(j);
+  else if(inAppForm) openInApp(j,defaultCv());
   else if(dir==="apply") toast(IN_APP?`Saved · ${j.c} can't be filled in the app yet`:`Saved · open the Hitch app to apply to ${j.c}`);
   card.style.pointerEvents="none";
   advanceDeck(card);
@@ -772,7 +836,7 @@ async function openFilled(j){
 
 const STATUS={queued:"Not sent yet",sending:"Sending…",sent:"Sent ✓",failed:"Couldn't send",needs_you:"Needs you",cancelled:"Cancelled"};
 function statusLabel(s){return `<span style="font-weight:700;color:${s==="sent"?"var(--yes)":s==="failed"||s==="needs_you"?"var(--no)":"var(--muted)"}">${STATUS[s]||"Waiting to send"}</span>`;}
-async function loadStatuses(){ if(!UID)return; const {data}=await SB.from("applications").select("job_id,status,detail"); window.__appStatus=Object.fromEntries((data||[]).map(r=>[r.job_id,r.status])); window.__appDetail=Object.fromEntries((data||[]).map(r=>[r.job_id,r.detail||""])); }
+async function loadStatuses(){ if(!UID)return; const {data}=await SB.from("applications").select("job_id,status,detail,cv_label"); window.__appCv=Object.fromEntries((data||[]).map(r=>[r.job_id,r.cv_label||""])); window.__appStatus=Object.fromEntries((data||[]).map(r=>[r.job_id,r.status])); window.__appDetail=Object.fromEntries((data||[]).map(r=>[r.job_id,r.detail||""])); }
 function renderSaved(t){
   if(t==="apply"&&!renderSaved._busy){renderSaved._busy=true;loadStatuses().then(()=>{renderSaved._busy=false;if($("s-saved").classList.contains("active"))renderSaved("apply");});}
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
@@ -781,7 +845,7 @@ function renderSaved(t){
   $("savedList").innerHTML=(list.length?"":`<div style="color:var(--muted);padding:20px 4px">Nothing here yet.</div>`);
   list.slice().reverse().forEach(j=>{
     const r=document.createElement("div");r.className="row";
-    r.innerHTML=`<div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div><div style="min-width:0"><div class="t" dir="auto">${esc(j.t)}</div><div class="s">${esc(j.c)} · ${esc(j.ci)}</div></div><div class="y">${t==="apply"?statusLabel(stat[j.id]):(j.y==null?"?":j.y===0?"Entry":j.y+"+ yrs")}</div>`;
+    r.innerHTML=`<div class="logo-sq" style="background:${colorOf(j.c)}">${initial(j.c)}</div><div style="min-width:0"><div class="t" dir="auto">${esc(j.t)}</div><div class="s">${esc(j.c)} · ${esc(j.ci)}${t==="apply"&&(window.__appCv||{})[j.id]?` · CV: ${esc(window.__appCv[j.id])}`:""}</div></div><div class="y">${t==="apply"?statusLabel(stat[j.id]):(j.y==null?"?":j.y===0?"Entry":j.y+"+ yrs")}</div>`;
     r.onclick=()=>openSheet(j,true); $("savedList").appendChild(r);
   });
 }
@@ -1077,6 +1141,7 @@ function setPasswordPage(){
     history.replaceState(null,"",location.pathname); bg.remove(); toast("Password saved. Use it in the app.");
   };
 }
+$("cvAdd").onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=""; if(f) addCv(f); };
 $("signOut").onclick=async()=>{window.__hitchUserSignedOut=true; if(IN_APP) toApp({type:"session-clear"}); await SB.auth.signOut(); try{localStorage.clear();}catch(e){} location.reload();};
 SB.auth.onAuthStateChange((ev,session)=>{
   if(session){
