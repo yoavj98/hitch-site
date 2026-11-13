@@ -302,7 +302,12 @@ header{padding:18px 22px 10px}
 .hero .big{font-size:40px;line-height:1.05}
 .count{margin:4px 0 20px}
 .backbtn{display:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer;place-items:center;padding:0}
-.backbtn.show{display:grid}.backbtn svg{width:18px;height:18px}
+.backbtn.show{display:grid}
+.screen.swipe-prev{display:flex;position:absolute;left:0;right:0;bottom:0;z-index:1;background:#fff}
+.screen.swipe-cur{position:absolute;left:0;right:0;bottom:0;z-index:2;background:#fff;box-shadow:-10px 0 30px rgba(30,30,25,.08)}
+.cfcv{display:none;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:16px;cursor:pointer}
+.cfcv.show{display:flex}.cfcv svg{color:var(--accent);flex:none}.cfcv small{display:block;font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.cfcv b{display:block;font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cfcv .min{min-width:0;flex:1}.cfcv em{font-style:normal;color:var(--accent-ink);font-weight:500;font-size:13px}.backbtn svg{width:18px;height:18px}
 *{scrollbar-width:none}*::-webkit-scrollbar{display:none;width:0;height:0}
 .how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
 </style>
@@ -364,6 +369,7 @@ header{padding:18px 22px 10px}
       <div class="dots"><i class="on"></i><i class="on"></i><i></i><i></i></div>
       <h1>Is this you?</h1>
       <p class="lead" id="cfLead">These details go to the company with every application. Fix anything that's off.</p>
+      <label class="cfcv" id="cfCv"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span class="min"><small>CV</small><b id="cfCvName"></b></span><em>Change</em></label>
       <div class="form">
         <div class="row2"><label>First name<input id="fFirst" autocomplete="given-name"></label><label>Last name<input id="fLast" autocomplete="family-name"></label></div>
         <label>Email<input id="fEmail" type="email" autocomplete="email"></label>
@@ -765,11 +771,27 @@ function goBack(){
 }
 window.hitchBack=goBack;
 $("backBtn").onclick=goBack;
-// swipe from the left edge to go back (not on the deck, where a right swipe means wishlist)
-(()=>{let x0=null,y0=0;
-  document.addEventListener("touchstart",e=>{const t=e.touches[0]; x0=(t.clientX<28&&CUR!=="deck")?t.clientX:null; y0=t.clientY;},{passive:true});
-  document.addEventListener("touchend",e=>{ if(x0==null)return; const t=e.changedTouches[0];
-    if(t.clientX-x0>70&&Math.abs(t.clientY-y0)<60) goBack(); x0=null; },{passive:true});
+// swipe from the left edge to go back: the screen follows the finger, the previous one shows underneath
+(()=>{let x0=null,y0=0,dx=0,on=false,cur=null,prev=null,t0=0;const W=()=>document.querySelector(".app").clientWidth;
+  const ease="transform .26s cubic-bezier(.2,.8,.2,1)";
+  function setX(x,anim){ cur.style.transition=prev.style.transition=anim?ease:"none";
+    cur.style.transform=`translateX(${x}px)`; prev.style.transform=`translateX(${(x-W())*0.3}px)`; }
+  function clean(){ [cur,prev].forEach(el=>{ if(el){el.classList.remove("swipe-cur","swipe-prev");el.style.transform=el.style.transition="";el.style.top="";} }); cur=prev=null; on=false; }
+  document.addEventListener("touchstart",e=>{ const t=e.touches[0]; on=false; dx=0;
+    x0=(t.clientX<28&&CUR!=="deck"&&(NAV.length||$("sheet").classList.contains("open")))?t.clientX:null; y0=t.clientY; t0=Date.now(); },{passive:true});
+  document.addEventListener("touchmove",e=>{ if(x0==null)return; const t=e.touches[0]; dx=Math.max(0,t.clientX-x0); const dy=Math.abs(t.clientY-y0);
+    if(!on){ if(dy>12&&dy>dx){x0=null;return;} if(dx<8)return;
+      if($("sheet").classList.contains("open")){x0=null;closeSheet();return;}
+      cur=document.querySelector(".screen.active"); prev=$("s-"+NAV[NAV.length-1]); if(!cur||!prev){x0=null;return;}
+      if(NAV[NAV.length-1]==="saved") renderSaved(SAVED_TAB);
+      const top=cur.offsetTop+"px"; prev.style.top=cur.style.top=top;
+      prev.classList.add("swipe-prev"); cur.classList.add("swipe-cur"); on=true; }
+    e.preventDefault(); setX(dx,false); },{passive:false});
+  function end(){ if(x0==null||!on){x0=null;return;} x0=null;
+    const fast=dx/(Date.now()-t0)>0.5&&dx>40;
+    if(dx>W()*0.35||fast){ setX(W(),true); setTimeout(()=>{ clean(); goBack(); },260); }
+    else { setX(0,true); setTimeout(clean,260); } }
+  document.addEventListener("touchend",end,{passive:true}); document.addEventListener("touchcancel",end,{passive:true});
 })();
 function openHashJob(){
   const m=(location.hash||"").match(/^#job-([0-9a-f]{16})$/); if(!m)return false;
@@ -1147,12 +1169,8 @@ function handleGmailReturn(){
 }
 
 $("wStart").onclick=()=>go("cv");
-$("editProfile").onclick=()=>{
-  const n=ob.profile.cvName||(defaultCv()&&defaultCv().name);
-  if(n){ $("cvDrop").classList.add("has"); $("cvTitle").textContent=n; $("cvSub").textContent="Your current CV · tap to choose a different file";
-    $("cvNext").disabled=false; $("cvNext").style.opacity=1; $("cvNote").textContent=""; }
-  fillConfirm(); go("cv");
-};
+$("editProfile").onclick=()=>{ fillConfirm(); go("confirm"); };
+$("cfCv").onclick=()=>$("cvFile").click();
 $("howGo").onclick=()=>{ob.done=true;saveOb();buildQueue();renderDeck();go("deck");};
 
 let cvFileObj=null;
@@ -1169,6 +1187,7 @@ $("cvFile").onchange=async e=>{
       $("cvNote").textContent=n?"Got it. We found your details, check them on the next screen.":"We couldn't read details from this file. You'll fill them in on the next screen.";
     }catch(err){ ob._found={}; $("cvNote").textContent="We couldn't read this file. You'll fill in your details on the next screen."; }
   } else { ob._found={}; $("cvNote").textContent="Word files can't be read here yet. You'll fill in your details on the next screen."; }
+  if(CUR==="confirm") fillConfirm();
 };
 $("cvNext").onclick=()=>{fillConfirm();go("confirm");};
 
@@ -1177,6 +1196,10 @@ function fillConfirm(){
   [["fFirst","first"],["fLast","last"],["fEmail","email"],["fPhone","phone"],["fYears","years"]].forEach(([id,k])=>{
     $(id).value=p[k]??""; $(id).classList.toggle("found",f[k]!=null&&f[k]!=="");});
   $("cfErr").textContent="";
+  const cvn=p.cvName||(defaultCv()&&defaultCv().name)||"";
+  $("cfCv").classList.toggle("show",!!ob.done); $("cfCvName").textContent=cvn||"No CV yet";
+  document.querySelector("#s-confirm h1").textContent=ob.done?"Your details":"Is this you?";
+  $("cfNext").textContent=ob.done?"Save":"Looks right";
 }
 $("cfNext").onclick=()=>{
   const p=ob.profile;
@@ -1186,7 +1209,7 @@ $("cfNext").onclick=()=>{
   if(!/^\S+@\S+\.\S+$/.test(p.email)){$("cfErr").textContent="Please check your email address.";return;}
   if(p.phone.replace(/\D/g,"").length<9){$("cfErr").textContent="Please check your phone number.";return;}
   if(p.years!=null){state.yrs=Math.min(12,p.years);$("yrs").value=state.yrs;$("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");}
-  saveOb(); updateCount(); go(ob.done?"deck":"setup");
+  saveOb(); updateCount(); if(ob.done){ if(!goBack()) go("deck"); toast("Saved"); } else go("setup");
 };
 
 // Reads name, email, phone and years of experience from a PDF CV
