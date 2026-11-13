@@ -301,13 +301,16 @@ header{padding:18px 22px 10px}
 .sh-acts .act{flex:none;padding:0;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center}
 .hero .big{font-size:40px;line-height:1.05}
 .count{margin:4px 0 20px}
+.backbtn{display:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer;place-items:center;padding:0}
+.backbtn.show{display:grid}.backbtn svg{width:18px;height:18px}
+*{scrollbar-width:none}*::-webkit-scrollbar{display:none;width:0;height:0}
 .how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="logo">Hitch<span>.</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><button class="backbtn" id="backBtn" aria-label="Back" title="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><div class="logo">Hitch<span>.</span></div></div>
     <div style="display:flex;gap:8px" class="hdr-right" id="hdrBtns"></div>
   </header>
 
@@ -734,17 +737,40 @@ function updateCount(){ if(!JOBS.length)return; const n=filtered().length;
   $("startBtn").textContent=n?"Show me jobs":"No jobs match these filters"; $("startBtn").disabled=!n; $("startBtn").style.opacity=n?1:.5; }
 
 const OB_SCREENS=["loading","login","welcome","cv","confirm","how"];
-function go(screen){
+let CUR=null, NAV=[];
+const NO_BACK=["deck","login","loading","welcome"];
+function go(screen,isBack){
+  if(!isBack&&CUR&&CUR!==screen&&!["loading","login"].includes(CUR)) NAV.push(CUR);
+  if(NO_BACK.includes(screen)) NAV=[];
+  CUR=screen;
+  $("backBtn").classList.toggle("show",NAV.length>0);
+  toApp({type:"nav",canBack:NAV.length>0});
   if(screen==="setup") renderCvs();
   document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("active",s.id==="s-"+screen));
   document.querySelector("header").classList.toggle("hide",OB_SCREENS.includes(screen)||(screen==="setup"&&!ob.done));
   $("setupDots").style.display=ob.done?"none":"flex";
+  document.querySelectorAll("#s-cv .dots,#s-confirm .dots").forEach(d=>d.style.display=ob.done?"none":"flex");
+  document.querySelector("#s-cv h1").textContent=ob.done?"Your CV":"Upload your CV";
   const h=$("hdrBtns"); h.innerHTML="";
   if(screen!=="setup"){const f=document.createElement("button");f.className="iconbtn";f.textContent="Filters";f.onclick=()=>go("setup");h.appendChild(f);}
   if(screen!=="saved"){const s=document.createElement("button");s.className="iconbtn";s.innerHTML=`My lists <span class="badge">${state.likes.length+state.applies.length}</span>`;s.onclick=()=>{renderSaved("like");go("saved")};h.appendChild(s);}
   else {const d=document.createElement("button");d.className="iconbtn";d.textContent="Back to deck";d.onclick=()=>go("deck");h.appendChild(d);}
 }
 
+function goBack(){
+  if($("sheet").classList.contains("open")){closeSheet();return true;}
+  const prev=NAV.pop(); if(!prev)return false;
+  if(prev==="saved") renderSaved(SAVED_TAB);
+  go(prev,true); return true;
+}
+window.hitchBack=goBack;
+$("backBtn").onclick=goBack;
+// swipe from the left edge to go back (not on the deck, where a right swipe means wishlist)
+(()=>{let x0=null,y0=0;
+  document.addEventListener("touchstart",e=>{const t=e.touches[0]; x0=(t.clientX<28&&CUR!=="deck")?t.clientX:null; y0=t.clientY;},{passive:true});
+  document.addEventListener("touchend",e=>{ if(x0==null)return; const t=e.changedTouches[0];
+    if(t.clientX-x0>70&&Math.abs(t.clientY-y0)<60) goBack(); x0=null; },{passive:true});
+})();
 function openHashJob(){
   const m=(location.hash||"").match(/^#job-([0-9a-f]{16})$/); if(!m)return false;
   const j=JOBS.find(x=>x.id===m[1]); if(!j)return false;
@@ -991,8 +1017,11 @@ async function openFilled(j){
 const STATUS={queued:"Not sent yet",sending:"Sending…",sent:"Sent ✓",failed:"Couldn't send",needs_you:"Needs you",cancelled:"Cancelled"};
 function statusLabel(s){return `<span style="font-weight:700;color:${s==="sent"?"var(--yes)":s==="failed"||s==="needs_you"?"var(--no)":"var(--muted)"}">${STATUS[s]||"Waiting to send"}</span>`;}
 async function loadStatuses(){ if(!UID)return; const {data}=await SB.from("applications").select("job_id,status,detail,cv_label"); window.__appCv=Object.fromEntries((data||[]).map(r=>[r.job_id,r.cv_label||""])); window.__appStatus=Object.fromEntries((data||[]).map(r=>[r.job_id,r.status])); window.__appDetail=Object.fromEntries((data||[]).map(r=>[r.job_id,r.detail||""])); }
-function renderSaved(t){
-  if(t==="apply"&&!renderSaved._busy){renderSaved._busy=true;loadStatuses().then(()=>{renderSaved._busy=false;if($("s-saved").classList.contains("active"))renderSaved("apply");});}
+let SAVED_TAB="like";
+function renderSaved(t,fresh){
+  SAVED_TAB=t;
+  if(t==="apply"&&!fresh){const before=JSON.stringify(window.__appStatus||{});
+    loadStatuses().then(()=>{ if(SAVED_TAB==="apply"&&$("s-saved").classList.contains("active")&&JSON.stringify(window.__appStatus||{})!==before) renderSaved("apply",true); });}
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
   const list=listOf(t);
   const stat=window.__appStatus||{};
@@ -1118,7 +1147,12 @@ function handleGmailReturn(){
 }
 
 $("wStart").onclick=()=>go("cv");
-$("editProfile").onclick=()=>{fillConfirm();go("cv");};
+$("editProfile").onclick=()=>{
+  const n=ob.profile.cvName||(defaultCv()&&defaultCv().name);
+  if(n){ $("cvDrop").classList.add("has"); $("cvTitle").textContent=n; $("cvSub").textContent="Your current CV · tap to choose a different file";
+    $("cvNext").disabled=false; $("cvNext").style.opacity=1; $("cvNote").textContent=""; }
+  fillConfirm(); go("cv");
+};
 $("howGo").onclick=()=>{ob.done=true;saveOb();buildQueue();renderDeck();go("deck");};
 
 let cvFileObj=null;
