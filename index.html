@@ -209,7 +209,7 @@ header{padding:18px 22px 10px}
 .field label.t,.form label,.must h4,.sheet h3,.fact small{font-size:10.5px!important;font-weight:600!important;letter-spacing:.14em!important;text-transform:uppercase;color:var(--muted)}
 .field{margin-bottom:26px}
 .chips{gap:7px}
-.chip{border:1px solid var(--line);padding:8px 15px;font:400 14px var(--sans);color:var(--ink2);background:#fff;transition:background .15s,color .15s,border-color .15s}
+.chip{border:1px solid var(--line);padding:8px 15px;font:400 14px var(--sans);color:var(--ink2);background:#fff}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .primary{background:var(--ink);font:500 15px var(--sans);letter-spacing:.01em;padding:17px;border-radius:14px}
 .range input{accent-color:var(--accent)}
@@ -308,7 +308,8 @@ header{padding:18px 22px 10px}
 .cfcv{display:none;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:16px;cursor:pointer}
 .cfcv.show{display:flex}.cfcv svg{color:var(--accent);flex:none}.cfcv small{display:block;font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .cfcv b{display:block;font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cfcv .min{min-width:0;flex:1}.cfcv em{font-style:normal;color:var(--accent-ink);font-weight:500;font-size:13px}.backbtn svg{width:18px;height:18px}
-*{scrollbar-width:none}*::-webkit-scrollbar{display:none;width:0;height:0}
+*{scrollbar-width:none}*::-webkit-scrollbar{width:0;height:0;background:transparent}
+.setup{-webkit-transform:translateZ(0);transform:translateZ(0)}
 .how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
 </style>
 </head>
@@ -701,14 +702,17 @@ function chips(el,items,set,single){
     const b=document.createElement("button");b.className="chip";b.textContent=label;
     const on=()=>single?state.gap===key:set.has(key);
     b.classList.toggle("on",on());
-    b.onclick=()=>{ if(single){state.gap=key;chips(el,items,set,single);} else {set.has(key)?set.delete(key):set.add(key);b.classList.toggle("on",on());} updateCount(); };
+    b.onclick=()=>{ if(single){state.gap=key;[...el.children].forEach(x=>x.classList.toggle("on",x===b));} else {set.has(key)?set.delete(key):set.add(key);b.classList.toggle("on",on());}
+      b.blur(); repaint(el); updateCount(); };
     el.appendChild(b);
   });
 }
+// iPhone sometimes stops drawing a group of chips after one of them changes; redraw the group
+function repaint(el){ requestAnimationFrame(()=>{ el.style.display="none"; void el.offsetHeight; el.style.display=""; }); }
 function renderUnknown(){
   const el=$("c-unk"); el.innerHTML="";
   [{k:true,l:"Include"},{k:false,l:"Hide"}].forEach(o=>{const b=document.createElement("button");b.className="chip"+(state.unknownYrs===o.k?" on":"");b.textContent=o.l;
-    b.onclick=()=>{state.unknownYrs=o.k;renderUnknown();updateCount();};el.appendChild(b);});
+    b.onclick=()=>{state.unknownYrs=o.k;[...el.children].forEach(x=>x.classList.toggle("on",x===b));b.blur();repaint(el);updateCount();};el.appendChild(b);});
 }
 function renderRoles(){
   chips($("c-roles"),ROLES,state.roles);
