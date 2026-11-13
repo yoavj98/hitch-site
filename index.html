@@ -776,11 +776,16 @@ $("backBtn").onclick=goBack;
   const ease="transform .26s cubic-bezier(.2,.8,.2,1)";
   function setX(x,anim){ cur.style.transition=prev.style.transition=anim?ease:"none";
     cur.style.transform=`translateX(${x}px)`; prev.style.transform=`translateX(${(x-W())*0.3}px)`; }
-  function clean(){ [cur,prev].forEach(el=>{ if(el){el.classList.remove("swipe-cur","swipe-prev");el.style.transform=el.style.transition="";el.style.top="";} }); cur=prev=null; on=false; }
+  // after a swipe the screens get repainted, so iPhone never leaves parts of them blank
+  function clean(){ [cur,prev].forEach(el=>{ if(el){el.classList.remove("swipe-cur","swipe-prev");el.style.transform=el.style.transition="";el.style.top="";
+      const sc=[...el.querySelectorAll(".setup,.saved-list,div")].filter(d=>d.scrollTop>0).map(d=>[d,d.scrollTop]);
+      el.style.display="none"; void el.offsetHeight; el.style.display=""; sc.forEach(([d,t])=>d.scrollTop=t);} }); cur=prev=null; on=false; }
+  // a touch that starts on a button, chip or field is a tap, never a back swipe
   document.addEventListener("touchstart",e=>{ const t=e.touches[0]; on=false; dx=0;
-    x0=(t.clientX<28&&CUR!=="deck"&&(NAV.length||$("sheet").classList.contains("open")))?t.clientX:null; y0=t.clientY; t0=Date.now(); },{passive:true});
+    const onControl=e.target.closest&&e.target.closest("button,input,label,a,select,textarea,.chip");
+    x0=(!onControl&&t.clientX<28&&CUR!=="deck"&&(NAV.length||$("sheet").classList.contains("open")))?t.clientX:null; y0=t.clientY; t0=Date.now(); },{passive:true});
   document.addEventListener("touchmove",e=>{ if(x0==null)return; const t=e.touches[0]; dx=Math.max(0,t.clientX-x0); const dy=Math.abs(t.clientY-y0);
-    if(!on){ if(dy>12&&dy>dx){x0=null;return;} if(dx<8)return;
+    if(!on){ if(dy>12&&dy>dx){x0=null;return;} if(dx<14||dx<dy*1.5)return;
       if($("sheet").classList.contains("open")){x0=null;closeSheet();return;}
       cur=document.querySelector(".screen.active"); prev=$("s-"+NAV[NAV.length-1]); if(!cur||!prev){x0=null;return;}
       if(NAV[NAV.length-1]==="saved") renderSaved(SAVED_TAB);
