@@ -91,7 +91,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .more{margin-top:auto;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
 .more button{background:none;border:none;font:700 14px Inter;color:var(--accent);cursor:pointer}
 
-.actions{display:flex;justify-content:center;align-items:center;gap:22px;padding:18px 0 22px}
+.actions{display:flex;justify-content:center;align-items:center;gap:120px;padding:18px 0 22px}
 .act{width:64px;height:64px;border-radius:50%;border:none;background:var(--surface);box-shadow:0 4px 14px rgba(0,0,0,.08);cursor:pointer;display:grid;place-items:center}
 .act.sm{width:46px;height:46px}
 .act svg{width:28px;height:28px}
@@ -119,6 +119,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .sheet-actions{display:flex;gap:10px;padding:12px 22px 20px;border-top:1px solid var(--line)}
 .sheet-actions button{flex:1;padding:14px;border-radius:12px;font:700 15px Inter;cursor:pointer;border:none}
 .b-no{background:#fde9e9;color:var(--no)}
+.sheet-actions:has(.sh-acts){flex-direction:column;align-items:center;gap:6px;padding:14px 22px 16px}
+.sh-acts{display:flex;justify-content:center;gap:22px}
+.sh-page{color:var(--muted);font:600 14px Inter;text-decoration:none;padding:6px}
 .b-yes{background:var(--yes);color:#fff}
 #sRetry,#sGmail{display:block;width:100%;padding:12px;border-radius:12px;font:700 15px Inter;cursor:pointer;border:none;color:#fff}
 
@@ -306,9 +309,6 @@ header.hide .hdr-right{visibility:hidden}
     <div class="deck" id="deck"></div>
     <div class="actions">
       <button class="act sm" id="undoBtn" title="Undo" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="#d98a0b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-      <button class="act" id="noBtn" title="Pass" aria-label="Pass"><svg viewBox="0 0 24 24" fill="none" stroke="#e0484b" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-      <button class="act" id="upBtn" title="Apply" aria-label="Apply"><svg viewBox="0 0 24 24" fill="none" stroke="#2f5bea" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
-      <button class="act" id="yesBtn" title="Wishlist" aria-label="Wishlist"><svg viewBox="0 0 24 24" fill="none" stroke="#14a36b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19 7"/></svg></button>
       <button class="act sm" id="infoBtn" title="Details" aria-label="Details"><svg viewBox="0 0 24 24" fill="none" stroke="#2f5bea" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg></button>
     </div>
     <div class="hint">← not interested · → wishlist · ↑ apply · tap for details</div>
@@ -784,9 +784,6 @@ function undo(){
   state.queue.unshift(last.j); renderDeck(); go("deck"); toast("Undone");
 }
 
-$("noBtn").onclick=()=>swipe("nope");
-$("yesBtn").onclick=()=>swipe("like");
-$("upBtn").onclick=()=>swipe("apply");
 $("undoBtn").onclick=undo;
 $("infoBtn").onclick=()=>state.queue[0]&&openSheet(state.queue[0]);
 
@@ -835,7 +832,7 @@ function openSheet(j,fromSaved){
     } else
     acts.innerHTML=`<a class="alink" href="${esc(safeUrl(j.u))}" target="_blank" rel="noopener">Apply on company site ↗</a>`;
   } else {
-    acts.innerHTML=`<button class="b-no" id="sNo">Pass</button><button class="b-yes" id="sLike">Wishlist</button><a class="alink" href="${esc(safeUrl(j.u))}" target="_blank" rel="noopener" style="background:var(--chip);color:var(--ink)">Job page ↗</a><button class="b-yes" id="sYes" style="background:var(--accent)">Apply</button>`;
+    acts.innerHTML=`<div class="sh-acts"><button class="act" id="sNo" title="Pass" aria-label="Pass"><svg viewBox="0 0 24 24" fill="none" stroke="#e0484b" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><button class="act" id="sYes" title="Apply" aria-label="Apply"><svg viewBox="0 0 24 24" fill="none" stroke="#2f5bea" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button><button class="act" id="sLike" title="Wishlist" aria-label="Wishlist"><svg viewBox="0 0 24 24" fill="none" stroke="#14a36b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19 7"/></svg></button></div><a class="sh-page" href="${esc(safeUrl(j.u))}" target="_blank" rel="noopener">Job page ↗</a>`;
     $("sNo").onclick=()=>{closeSheet();setTimeout(()=>swipe("nope"),200)};
     $("sYes").onclick=()=>{closeSheet();setTimeout(()=>swipe("apply"),200)};
     $("sLike").onclick=()=>{closeSheet();setTimeout(()=>swipe("like"),200)};
