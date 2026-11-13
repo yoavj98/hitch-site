@@ -7,11 +7,12 @@
 <meta name="robots" content="noindex,nofollow">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Frank+Ruhl+Libre:wght@400;500;600&family=Heebo:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f3f1ec; --surface:#ffffff; --ink:#16181d; --muted:#6b6f78; --line:#e6e3dc;
-  --accent:#2f5bea; --yes:#14a36b; --no:#e0484b; --warn:#d98a0b; --chip:#f1efe9;
+  --bg:#ffffff; --surface:#ffffff; --ink:#1f1f1d; --ink2:#45443f; --muted:#8c8a83; --line:#ecebe6;
+  --accent:#5f6e62; --accent-ink:#3f4b42; --accent-soft:#f0f2ef; --yes:#5f6e62; --no:#a3675e; --warn:#a88a55; --chip:#f6f5f2;
+  --serif:"Frank Ruhl Libre",Georgia,serif; --sans:Inter,Heebo,system-ui,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -192,12 +193,121 @@ header.hide .hdr-right{visibility:hidden}
 .must li{font-size:14.5px}
 .must .moreReq{font-size:13px;color:var(--muted);margin-top:6px}
 .more{padding-top:10px}
+
+/* ===== Theme: white, one muted sage, serif headings ===== */
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:15px}
+button,input{font-family:var(--sans)}
+header{padding:18px 22px 10px}
+.logo{font:500 25px/1 var(--serif);letter-spacing:-.01em}
+.logo span,.hero .big span{color:var(--accent)}
+.iconbtn{height:34px;padding:0 14px;border:1px solid var(--line);background:#fff;font:500 13px var(--sans);color:var(--ink2)}
+.badge{background:var(--accent);font-weight:600}
+.setup h1,.ob h1,.saved h1,.sheet h2,.modal h2{font-family:var(--serif);font-weight:500;letter-spacing:-.01em}
+.setup h1,.ob h1{font-size:31px;line-height:1.12;margin:14px 0 8px}
+.hero .big{font:500 46px/1.02 var(--serif);letter-spacing:-.02em}
+.setup p.lead,.ob p.lead{font-size:15px;line-height:1.55;color:var(--muted)}
+.field label.t,.form label,.must h4,.sheet h3,.fact small{font-size:10.5px!important;font-weight:600!important;letter-spacing:.14em!important;text-transform:uppercase;color:var(--muted)}
+.field{margin-bottom:26px}
+.chips{gap:7px}
+.chip{border:1px solid var(--line);padding:8px 15px;font:400 14px var(--sans);color:var(--ink2);background:#fff;transition:background .15s,color .15s,border-color .15s}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.primary{background:var(--ink);font:500 15px var(--sans);letter-spacing:.01em;padding:17px;border-radius:14px}
+.range input{accent-color:var(--accent)}
+.range output{font:500 26px var(--serif)}
+.dots{gap:5px;margin:6px 0 4px}.dots i{height:2px;border-radius:2px}.dots i.on{background:var(--accent)}
+.form input,#q{border:1px solid var(--line)!important;border-radius:12px!important;font:400 16px var(--sans)!important;padding:14px!important;background:#fff}
+.form input:focus,#q:focus{outline:none;border-color:var(--accent)!important}
+.sub,.note,.count{color:var(--muted)}
+.err{color:var(--no);font-weight:500}
+
+/* Card */
+.deck{margin:6px 18px 0}
+.card{border:1px solid var(--line);border-radius:24px;box-shadow:0 1px 2px rgba(30,30,25,.03),0 14px 34px rgba(30,30,25,.06);padding:24px 24px 16px}
+.card.under{transform:scale(.96) translateY(12px);opacity:.55}
+.co{gap:12px;margin-bottom:18px}
+.logo-img{border:1px solid var(--line);border-radius:12px;width:44px;height:44px}
+.co-name{font-weight:600;font-size:14.5px}
+.co-meta{font-size:12.5px;color:var(--muted);margin-top:1px}
+.role{font:500 30px/1.12 var(--serif);letter-spacing:-.01em;margin-bottom:14px}
+.role.long{font-size:24px}
+.loc{gap:6px;margin-bottom:18px}
+.pill{background:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:500;color:var(--ink2)}
+.exp{background:none!important;border-radius:0;padding:12px 0!important;margin-bottom:18px!important;border-top:1px solid var(--line);border-bottom:1px solid var(--line);gap:14px}
+.exp .n{font:500 30px/1 var(--serif)!important;letter-spacing:0}
+.exp .l{font-size:13px;font-weight:400;color:var(--muted)}
+.exp.fit .n{color:var(--accent)}.exp.stretch .n{color:var(--warn)}.exp.over .n{color:var(--no)}.exp.unk .n{color:var(--muted)}
+.must h4{margin-bottom:10px}
+.must ul{gap:8px!important}
+.must li{font-size:14.5px!important;line-height:1.45;color:var(--ink2);padding-left:16px}
+.must li:before{width:4px;height:4px;border-radius:50%;background:var(--accent);top:9px;left:1px}
+.more{border-top:1px solid var(--line);font-size:12.5px}
+.more button{font:500 13px var(--sans);color:var(--accent-ink)}
+.stamp{font:600 13px var(--sans);letter-spacing:.22em;border:1.5px solid;border-radius:999px;padding:7px 16px;background:rgba(255,255,255,.92)}
+.stamp.like{color:var(--accent)}.stamp.nope{color:var(--no)}.stamp.apply{color:var(--ink)}
+
+/* Under the card */
+.actions{padding:16px 0 18px}
+.act{border:1px solid var(--line);box-shadow:none;background:#fff;transition:transform .12s}
+.act:active{transform:scale(.94)}
+.act.sm{width:46px;height:46px}
+.act.sm svg{width:19px;height:19px;stroke:var(--ink2);stroke-width:1.8}
+.hint{font-size:11px;letter-spacing:.06em;color:var(--muted);margin-top:-8px;padding-bottom:14px}
+
+/* Details sheet */
+.sheet-bg{background:rgba(25,25,22,.32)}
+.sheet{border-radius:26px 26px 0 0}
+.sheet .grab{width:36px;height:4px;margin:12px auto 8px}
+.sheet-body{padding:4px 24px 18px}
+.sheet h2{font-size:27px;line-height:1.15;margin:10px 0 6px}
+.sheet h3{margin:24px 0 10px}
+.sheet p,.sheet li{color:var(--ink2);line-height:1.6}
+.facts{gap:0 18px;margin-top:16px;border-top:1px solid var(--line)}
+.fact{background:none;border-radius:0;padding:12px 0;border-bottom:1px solid var(--line)}
+.fact span{font-weight:500;font-size:14px}
+.sheet-actions{border-top:1px solid var(--line)}
+.sheet-actions button{font:500 15px var(--sans)}
+.sh-acts{gap:26px;align-items:center}
+.sh-acts .act{width:58px;height:58px}
+.sh-acts .act svg{width:22px;height:22px;stroke-width:2}
+#sNo svg{stroke:var(--no)}#sLike svg{stroke:var(--accent)}
+#sYes.act{width:66px;height:66px;background:var(--accent);border-color:var(--accent)}#sYes.act svg{stroke:#fff}
+.sh-page{font:500 13px var(--sans);color:var(--muted)}
+.b-no{background:var(--chip);color:var(--no)}
+.b-yes{background:var(--accent)}
+.alink{background:var(--accent);font:500 15px var(--sans)}
+
+/* Saved, onboarding, misc */
+.saved h1{font-size:30px;margin:10px 4px 16px}
+.tabs button{border:1px solid var(--line);background:#fff;font:500 13px var(--sans);color:var(--ink2)}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.row{border:1px solid var(--line);border-radius:16px}
+.row .t{font-weight:600}
+.row .y{font-weight:600;color:var(--ink2)}
+.status{font-weight:600;letter-spacing:.02em}
+.status.applied,.status.saved{background:var(--accent-soft);color:var(--accent-ink)}
+.stat{border:1px solid var(--line);background:#fff}
+.stat b{font:500 24px var(--serif)}
+.drop{border:1.5px dashed #d8d6cf;border-radius:20px}
+.drop .ic{color:var(--accent);display:flex;justify-content:center}
+.drop.has,.cv.has{border-style:solid;border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.how div{border:1px solid var(--line);background:#fff}
+.how .ar{background:var(--accent-soft);color:var(--accent-ink);font:400 20px var(--sans)}
+.form input.found{border-color:#b9c4bb!important}
+.toast{border-radius:999px;font-weight:500;background:var(--ink)}
+.modal{border-radius:26px 26px 0 0}
+.modal .who{background:var(--chip)}
+.modal .btns button{font:500 15px var(--sans)}
+.applybar a{background:var(--accent)}
+.sh-acts .act{flex:none;padding:0;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center}
+.hero .big{font-size:40px;line-height:1.05}
+.count{margin:4px 0 20px}
+.how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="logo">Hit<span>ch</span></div>
+    <div class="logo">Hitch<span>.</span></div>
     <div style="display:flex;gap:8px" class="hdr-right" id="hdrBtns"></div>
   </header>
 
@@ -205,7 +315,7 @@ header.hide .hdr-right{visibility:hidden}
   <section class="screen" id="s-login">
     <div class="ob">
       <div class="hero">
-        <div class="big">Hit<span>ch</span></div>
+        <div class="big">Sign in<span>.</span></div>
         <p class="lead">Hitch is invite-only. Enter the email you were invited with and we'll send you a sign-in link.</p>
         <div class="form"><label>Email<input id="lgEmail" type="email" autocomplete="email"></label></div>
         <div class="form" style="margin-top:10px"><label>Password (if you set one)<input id="lgPass" type="password" autocomplete="current-password"></label></div>
@@ -213,7 +323,7 @@ header.hide .hdr-right{visibility:hidden}
         <div class="err" id="lgErr" style="margin-top:12px"></div>
       </div>
       <div class="spacer"></div>
-      <button class="primary" id="lgGoogle" style="margin-bottom:10px;background:#fff;color:#222;border:1px solid #ddd">Continue with Google</button>
+      <button class="primary" id="lgGoogle" style="margin-bottom:10px;background:#fff;color:var(--ink);border:1px solid var(--line)">Continue with Google</button>
       <button class="primary" id="lgPassBtn" style="margin-bottom:10px">Sign in with password</button>
       <button class="primary" id="lgSend" style="background:var(--chip);color:var(--ink)">Send me a sign-in link</button>
     </div>
@@ -238,7 +348,7 @@ header.hide .hdr-right{visibility:hidden}
       <h1>Upload your CV</h1>
       <p class="lead">We'll read your details from it, so you don't have to type them. It's the file we send when you apply.</p>
       <label class="drop" id="cvDrop"><input type="file" id="cvFile" accept=".pdf,.doc,.docx" hidden>
-        <div class="ic">📄</div><b id="cvTitle">Choose your CV</b><small id="cvSub">PDF or Word</small></label>
+        <div class="ic"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div><b id="cvTitle">Choose your CV</b><small id="cvSub">PDF or Word</small></label>
       <div class="note" id="cvNote"></div>
       <div class="spacer"></div>
       <button class="primary" id="cvNext" disabled style="opacity:.5">Continue</button>
@@ -295,9 +405,9 @@ header.hide .hdr-right{visibility:hidden}
       <h1>Three moves</h1>
       <p class="lead">Every card is a real, open job. Tap a card to read the full post.</p>
       <div class="how">
-        <div><span class="ar" style="background:#fde9e9;color:var(--no)">←</span><span><b>Not for me</b><br>Hide it and move on</span></div>
-        <div><span class="ar" style="background:#e7f6ef;color:var(--yes)">→</span><span><b>Wishlist</b><br>Keep it to decide later</span></div>
-        <div><span class="ar" style="background:#e8eefc;color:var(--accent)">↑</span><span><b>Apply</b><br>We send your CV and details to the company</span></div>
+        <div><span class="ar">←</span><span><b>Not for me</b><br>Hide it and move on</span></div>
+        <div><span class="ar">→</span><span><b>Wishlist</b><br>Keep it to decide later</span></div>
+        <div><span class="ar">↑</span><span><b>Apply</b><br>We send your CV and details to the company</span></div>
       </div>
       <div class="spacer"></div>
       <button class="primary" id="howGo">Show me jobs</button>
@@ -539,7 +649,7 @@ function pickCv(j){
   bg.innerHTML=`<div style="background:var(--surface);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 18px 28px">
     <div style="font:800 18px Inter;margin-bottom:4px">Which CV for ${esc(j.c)}?</div>
     <div style="color:var(--muted);font-size:14px;margin-bottom:12px" dir="auto">${esc(j.t)}</div>
-    ${CVS.map((c,i)=>`<button data-i="${i}" style="display:block;width:100%;text-align:left;padding:14px;margin-bottom:8px;border:1px solid var(--line);border-radius:14px;background:${c===d?"#eef3ff":"var(--surface)"};font:700 16px Inter;cursor:pointer">${esc(c.label)}<span style="display:block;font:500 12px Inter;color:var(--muted);margin-top:2px">${esc(c.name)}${c===d?" · default":""}</span></button>`).join("")}
+    ${CVS.map((c,i)=>`<button data-i="${i}" style="display:block;width:100%;text-align:left;padding:14px;margin-bottom:8px;border:1px solid var(--line);border-radius:14px;background:${c===d?"var(--accent-soft)":"var(--surface)"};font:700 16px Inter;cursor:pointer">${esc(c.label)}<span style="display:block;font:500 12px Inter;color:var(--muted);margin-top:2px">${esc(c.name)}${c===d?" · default":""}</span></button>`).join("")}
     <button data-cancel style="display:block;width:100%;padding:13px;border:none;border-radius:14px;background:var(--chip);font:700 15px Inter;cursor:pointer;margin-top:4px">Cancel</button></div>`;
   document.body.appendChild(bg);
   bg.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{ const cv=CVS[+b.dataset.i]; bg.remove(); saveSwipe(j,"apply",true,cv); openInApp(j,cv); });
@@ -664,7 +774,7 @@ function cardHTML(j){
   <div class="co">${logoHTML(j)}
     <div><div class="co-name">${esc(j.c)}</div><div class="co-meta">${esc(j.r)}</div></div></div>
   <div class="role${j.t.length>45?" long":""}" dir="auto">${esc(j.t)}</div>
-  <div class="loc"><span class="pill">📍 ${esc(j.ci)}</span>${j.w?`<span class="pill">${esc(j.w)}</span>`:""}</div>
+  <div class="loc">${j.ci?`<span class="pill">${esc(j.ci)}</span>`:""}${j.w?`<span class="pill">${esc(j.w)}</span>`:""}</div>
   <div class="exp ${fc}"><div class="n">${j.y==null?"?":j.y===0?"0":j.y+"+"}</div><div class="l">${fitLabel(j)}</div></div>
   ${musts}
   <div class="more"><span>${j.fs?"Found "+esc(j.fs):""}</span><button data-more>Full details ↑</button></div>`;
