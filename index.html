@@ -707,6 +707,24 @@ function chips(el,items,set,single){
     el.appendChild(b);
   });
 }
+// Diagnostics for the vanishing chips (iPhone only): tap the "Hitch." logo 5 times to show/hide a panel
+// with what the page knows about the chip groups. Nothing is sent anywhere.
+(()=>{let n=0,tm=null,box=null,iv=null;
+  function info(id){const el=$(id); if(!el)return id+": none";
+    const r=el.getBoundingClientRect(), c=el.firstElementChild, cs=c?getComputedStyle(c):null, es=getComputedStyle(el);
+    let hit="-"; if(c){const cr=c.getBoundingClientRect(); const h=document.elementFromPoint(cr.left+cr.width/2,cr.top+cr.height/2); hit=h?(h.tagName+(h.id?"#"+h.id:"")+"."+String(h.className).slice(0,20)):"null";}
+    return `${id}: kids ${el.children.length} h${Math.round(r.height)} y${Math.round(r.top)} op${es.opacity} vis${es.visibility} disp${es.display}`+
+      (cs?` | 1st "${c.textContent.slice(0,12)}" op${cs.opacity} vis${cs.visibility} col${cs.color} bg${cs.backgroundColor} tf${cs.transform} hit ${hit}`:"");}
+  function draw(){ if(!box)return; const scr=document.querySelector(".screen.active"), st=document.querySelector("#s-setup .setup");
+    box.textContent=[`screen ${scr&&scr.id} cls ${scr&&scr.className} tf "${scr&&scr.style.transform}" top "${scr&&scr.style.top}"`,
+      `scroll ${st&&Math.round(st.scrollTop)} / ${st&&st.scrollHeight}  win ${innerWidth}x${innerHeight}`,
+      info("c-roles"),info("c-gap"),info("c-locs"),`ua ${navigator.userAgent.slice(-60)}`].join("\n"); }
+  document.addEventListener("click",e=>{ if(!e.target.closest(".logo"))return; n++; clearTimeout(tm); tm=setTimeout(()=>n=0,1500);
+    if(n<5)return; n=0;
+    if(box){box.remove();box=null;clearInterval(iv);return;}
+    box=document.createElement("pre"); box.style.cssText="position:fixed;left:6px;right:6px;bottom:6px;z-index:99999;background:rgba(0,0,0,.82);color:#7f7;font:10px/1.35 monospace;padding:8px;border-radius:8px;white-space:pre-wrap;pointer-events:none;margin:0";
+    document.body.appendChild(box); draw(); iv=setInterval(draw,500); },true);
+})();
 // iPhone sometimes stops drawing a group of chips after one of them changes; redraw the group
 function repaint(el){ requestAnimationFrame(()=>{ el.style.display="none"; void el.offsetHeight; el.style.display=""; }); }
 function renderUnknown(){
