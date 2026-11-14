@@ -308,8 +308,7 @@ header{padding:18px 22px 10px}
 .cfcv{display:none;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:16px;cursor:pointer}
 .cfcv.show{display:flex}.cfcv svg{color:var(--accent);flex:none}.cfcv small{display:block;font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .cfcv b{display:block;font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cfcv .min{min-width:0;flex:1}.cfcv em{font-style:normal;color:var(--accent-ink);font-weight:500;font-size:13px}.backbtn svg{width:18px;height:18px}
-*{scrollbar-width:none}*::-webkit-scrollbar{width:0;height:0;background:transparent}
-.setup{-webkit-transform:translateZ(0);transform:translateZ(0)}
+*{scrollbar-width:none}
 .how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
 </style>
 </head>
@@ -805,16 +804,19 @@ $("backBtn").onclick=goBack;
   // a touch that starts on a button, chip or field is a tap, never a back swipe
   document.addEventListener("touchstart",e=>{ const t=e.touches[0]; on=false; dx=0;
     const onControl=e.target.closest&&e.target.closest("button,input,label,a,select,textarea,.chip");
-    x0=(!onControl&&t.clientX<28&&CUR!=="deck"&&(NAV.length||$("sheet").classList.contains("open")))?t.clientX:null; y0=t.clientY; t0=Date.now(); },{passive:true});
-  document.addEventListener("touchmove",e=>{ if(x0==null)return; const t=e.touches[0]; dx=Math.max(0,t.clientX-x0); const dy=Math.abs(t.clientY-y0);
+    x0=(!onControl&&t.clientX<28&&CUR!=="deck"&&(NAV.length||$("sheet").classList.contains("open")))?t.clientX:null; y0=t.clientY; t0=Date.now();
+    // the blocking move listener exists only during an edge touch: a permanent one makes iPhone stop drawing parts of the page
+    if(x0!=null) document.addEventListener("touchmove",move,{passive:false}); },{passive:true});
+  function move(e){ if(x0==null)return; const t=e.touches[0]; dx=Math.max(0,t.clientX-x0); const dy=Math.abs(t.clientY-y0);
     if(!on){ if(dy>12&&dy>dx){x0=null;return;} if(dx<14||dx<dy*1.5)return;
       if($("sheet").classList.contains("open")){x0=null;closeSheet();return;}
       cur=document.querySelector(".screen.active"); prev=$("s-"+NAV[NAV.length-1]); if(!cur||!prev){x0=null;return;}
       if(NAV[NAV.length-1]==="saved") renderSaved(SAVED_TAB);
       const top=cur.offsetTop+"px"; prev.style.top=cur.style.top=top;
       prev.classList.add("swipe-prev"); cur.classList.add("swipe-cur"); on=true; }
-    e.preventDefault(); setX(dx,false); },{passive:false});
-  function end(){ if(x0==null||!on){x0=null;return;} x0=null;
+    e.preventDefault(); setX(dx,false); }
+  function end(){ document.removeEventListener("touchmove",move,{passive:false});
+    if(x0==null||!on){x0=null;return;} x0=null;
     const fast=dx/(Date.now()-t0)>0.5&&dx>40;
     if(dx>W()*0.35||fast){ setX(W(),true); setTimeout(()=>{ clean(); goBack(); },260); }
     else { setX(0,true); setTimeout(clean,260); } }
