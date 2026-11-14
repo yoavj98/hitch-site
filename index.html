@@ -309,6 +309,15 @@ header{padding:18px 22px 10px}
 .cfcv.show{display:flex}.cfcv svg{color:var(--accent);flex:none}.cfcv small{display:block;font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .cfcv b{display:block;font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cfcv .min{min-width:0;flex:1}.cfcv em{font-style:normal;color:var(--accent-ink);font-weight:500;font-size:13px}.backbtn svg{width:18px;height:18px}
 *{scrollbar-width:none}
+/* Settings scroll as a normal page, not inside a box: iPhone stops drawing the chips inside a scrolling box */
+html.doc-scroll,html.doc-scroll body{height:auto}
+html.doc-scroll .app{height:auto;min-height:100dvh;overflow:visible}
+html.doc-scroll .screen{min-height:auto}
+html.doc-scroll .setup{overflow:visible;flex:none}
+html.doc-scroll header{position:sticky;top:0;z-index:5;background:var(--bg)}
+html.doc-scroll .toast{position:fixed}
+.screen.swipe-cur-doc{position:relative;z-index:2;background:#fff;box-shadow:-10px 0 30px rgba(30,30,25,.08)}
+.screen.swipe-prev-doc{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1;background:#fff;overflow:hidden}
 .how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
 </style>
 </head>
@@ -770,6 +779,9 @@ function go(screen,isBack){
   if(!isBack&&CUR&&CUR!==screen&&!["loading","login"].includes(CUR)) NAV.push(CUR);
   if(NO_BACK.includes(screen)) NAV=[];
   CUR=screen;
+  const wasDoc=document.documentElement.classList.contains("doc-scroll");
+  document.documentElement.classList.toggle("doc-scroll",screen==="setup");
+  if(wasDoc||screen==="setup") window.scrollTo(0,0);
   $("backBtn").classList.toggle("show",NAV.length>0);
   toApp({type:"nav",canBack:NAV.length>0});
   if(screen==="setup") renderCvs();
@@ -797,10 +809,7 @@ $("backBtn").onclick=goBack;
   const ease="transform .26s cubic-bezier(.2,.8,.2,1)";
   function setX(x,anim){ cur.style.transition=prev.style.transition=anim?ease:"none";
     cur.style.transform=`translateX(${x}px)`; prev.style.transform=`translateX(${(x-W())*0.3}px)`; }
-  // after a swipe the screens get repainted, so iPhone never leaves parts of them blank
-  function clean(){ [cur,prev].forEach(el=>{ if(el){el.classList.remove("swipe-cur","swipe-prev");el.style.transform=el.style.transition="";el.style.top="";
-      const sc=[...el.querySelectorAll(".setup,.saved-list,div")].filter(d=>d.scrollTop>0).map(d=>[d,d.scrollTop]);
-      el.style.display="none"; void el.offsetHeight; el.style.display=""; sc.forEach(([d,t])=>d.scrollTop=t);} }); cur=prev=null; on=false; }
+  function clean(){ [cur,prev].forEach(el=>{ if(el){el.classList.remove("swipe-cur","swipe-prev","swipe-cur-doc","swipe-prev-doc");el.style.transform=el.style.transition="";el.style.top="";} }); cur=prev=null; on=false; }
   // a touch that starts on a button, chip or field is a tap, never a back swipe
   document.addEventListener("touchstart",e=>{ const t=e.touches[0]; on=false; dx=0;
     const onControl=e.target.closest&&e.target.closest("button,input,label,a,select,textarea,.chip");
@@ -812,8 +821,11 @@ $("backBtn").onclick=goBack;
       if($("sheet").classList.contains("open")){x0=null;closeSheet();return;}
       cur=document.querySelector(".screen.active"); prev=$("s-"+NAV[NAV.length-1]); if(!cur||!prev){x0=null;return;}
       if(NAV[NAV.length-1]==="saved") renderSaved(SAVED_TAB);
-      const top=cur.offsetTop+"px"; prev.style.top=cur.style.top=top;
-      prev.classList.add("swipe-prev"); cur.classList.add("swipe-cur"); on=true; }
+      if(document.documentElement.classList.contains("doc-scroll")){ // the page itself scrolls: the screen stays in place, the previous one is pinned behind it
+        prev.style.top=document.querySelector("header").getBoundingClientRect().bottom+"px";
+        prev.classList.add("swipe-prev-doc"); cur.classList.add("swipe-cur-doc"); on=true; }
+      else { const top=cur.offsetTop+"px"; prev.style.top=cur.style.top=top;
+        prev.classList.add("swipe-prev"); cur.classList.add("swipe-cur"); on=true; } }
     e.preventDefault(); setX(dx,false); }
   function end(){ document.removeEventListener("touchmove",move,{passive:false});
     if(x0==null||!on){x0=null;return;} x0=null;
