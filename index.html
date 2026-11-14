@@ -217,6 +217,13 @@ header{padding:18px 22px 10px}
 .dots{gap:5px;margin:6px 0 4px}.dots i{height:2px;border-radius:2px}.dots i.on{background:var(--accent)}
 .form input,#q{border:1px solid var(--line)!important;border-radius:12px!important;font:400 16px var(--sans)!important;padding:14px!important;background:#fff}
 .form input:focus,#q:focus{outline:none;border-color:var(--accent)!important}
+.qsug{display:none;flex-direction:column;margin-top:6px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.qsug.open{display:flex}
+.sug{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;background:#fff;border:0;border-top:1px solid var(--line);padding:12px 14px;font:400 15px var(--sans);color:var(--ink);cursor:pointer}
+.sug:first-child{border-top:0}
+.sug b{font-weight:500}
+.sug span{color:var(--muted);font-size:13px;white-space:nowrap}
+.sug.cur{background:var(--accent-soft)}
 .sub,.note,.count{color:var(--muted)}
 .err{color:var(--no);font-weight:500}
 
@@ -397,7 +404,7 @@ html.doc-scroll .toast{position:fixed}
       <div class="dots" id="setupDots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
       <h1>What are you looking for?</h1>
       <p class="lead">Pick what fits. Leave a group empty to see everything.</p><p class="count" id="dataInfo">Loading jobs…</p>
-      <div class="field"><label class="t">Search</label><input id="q" type="search" placeholder="Type a role or skill and press Enter" autocomplete="off" style="width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:13px;font:500 16px Inter;color:var(--ink)"><p class="sub">For example OSINT, analyst or Python. It's added as a role below.</p></div>
+      <div class="field"><label class="t">Search</label><input id="q" type="search" placeholder="Type a role or skill and press Enter" autocomplete="off" style="width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:13px;font:500 16px Inter;color:var(--ink)"><div class="qsug" id="qsug"></div><p class="sub">Start typing, for example HR, analyst or Python, and pick from the list.</p></div>
       <div class="field"><label class="t">Roles</label><div class="chips" id="c-roles"></div></div>
       <div class="field"><label class="t">Your years of experience</label>
         <div class="range"><input type="range" min="0" max="12" value="2" id="yrs"><output id="yrsOut">2</output></div>
@@ -727,9 +734,87 @@ function renderRoles(){
   [...state.terms].reverse().forEach(t=>{const b=document.createElement("button");b.className="chip on";b.textContent=t+"  ×";b.title="Remove";
     b.onclick=()=>{state.terms.delete(t);renderRoles();updateCount();};$("c-roles").prepend(b);});
 }
-function addTerm(){const v=$("q").value.trim(); if(!v)return; state.terms.add(v); $("q").value=""; renderRoles(); updateCount();}
-$("q").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addTerm();}});
-$("q").addEventListener("blur",addTerm);
+function addTerm(){const v=$("q").value.trim(); hideSug(); if(!v)return; state.terms.add(v); $("q").value=""; renderRoles(); updateCount();}
+
+// Autocomplete: typing suggests one of our role groups (by its name or common words for it, English and Hebrew).
+// Anything else can still be added as a free search word, which matches whole words in the job.
+const ROLE_ALIASES={
+  "Analyst":["analyst","business analyst","financial analyst","אנליסט","אנליסטית"],
+  "Research":["research","researcher","scientist","osint","intelligence","חוקר","חוקרת","מחקר","מודיעין"],
+  "Software (General)":["software","developer","software engineer","programmer","engineer","architect","tech lead","team lead","מפתח","מפתחת","מתכנת","תוכנה","מהנדס תוכנה","ראש צוות"],
+  "Backend":["backend","back end","server","java","python","node","nodejs",".net","c#","golang","go","c++","בקאנד","צד שרת"],
+  "Frontend":["frontend","front end","react","angular","vue","javascript","typescript","web developer","ui developer","פרונט","פרונטאנד"],
+  "Full Stack":["full stack","fullstack","פול סטאק","פולסטאק"],
+  "Mobile":["mobile","ios","android","swift","kotlin","react native","flutter","מובייל"],
+  "Data / ML / Algorithms":["data","data scientist","data engineer","data analyst","machine learning","ml","ai","deep learning","computer vision","nlp","llm","algorithm","algorithms","bi","analytics","דאטה","אלגוריתמים","בינה מלאכותית","למידת מכונה"],
+  "DevOps / Cloud / IT":["devops","cloud","sre","aws","azure","gcp","kubernetes","infrastructure","it","sysadmin","network","helpdesk","help desk","erp","sap","crm","דבאופס","תשתיות","מערכות מידע","סיסטם","הלפדסק"],
+  "Security":["security","cyber","appsec","soc","pentest","penetration","threat","malware","סייבר","אבטחת מידע","אבטחה"],
+  "QA / Test":["qa","quality","test","tester","automation","validation","verification","qc","בודק","בודקת","בדיקות","אוטומציה","איכות"],
+  "Hardware / Embedded":["hardware","embedded","firmware","fpga","asic","vlsi","rtl","electrical","electronics","rf","analog","mechanical","optics","chip","חומרה","אמבדד","משובץ","אלקטרוניקה","חשמל","מכונות","מכני","אופטיקה"],
+  "Engineering (Industrial)":["industrial","industrial engineer","process engineer","maintenance","civil","construction","chemical","safety","manufacturing engineer","הנדסת תעשייה","תעשייה וניהול","אחזקה","תחזוקה","אזרחי","בנייה","בטיחות"],
+  "Product":["product","product manager","pm","product owner","מוצר","מנהל מוצר","מנהלת מוצר"],
+  "Design":["design","designer","ux","ui","product designer","graphic","מעצב","מעצבת","עיצוב"],
+  "Sales / BD":["sales","account executive","account manager","business development","bd","sdr","bdr","presales","pre sales","solutions engineer","מכירות","איש מכירות","פיתוח עסקי"],
+  "Marketing":["marketing","seo","ppc","content","growth","brand","pr","social media","copywriter","user acquisition","שיווק","תוכן","קופירייטר"],
+  "Customer Success / Support":["customer success","support","customer service","onboarding","implementation","technical support","שירות לקוחות","תמיכה","תמיכה טכנית"],
+  "Operations":["operations","ops","supply chain","logistics","procurement","buyer","planner","production","project manager","program manager","office manager","admin","technician","תפעול","לוגיסטיקה","רכש","ייצור","מנהל פרויקטים","טכנאי","אדמיניסטרציה"],
+  "Finance / Legal":["finance","accounting","accountant","controller","payroll","tax","legal","lawyer","counsel","compliance","cfo","כספים","הנהלת חשבונות","חשב","חשבונאות","שכר","משפטי","עורך דין","עו\"ד"],
+  "HR / Recruiting":["hr","human resources","recruiting","recruiter","recruitment","talent acquisition","talent","people","people operations","hrbp","משאבי אנוש","גיוס","מגייס","מגייסת","רכז גיוס"],
+  "Student / Intern":["student","intern","internship","junior","graduate","סטודנט","סטודנטית","מתמחה","ג'וניור"],
+};
+function lev1(a,b){ // true when a and b differ by at most one letter (typo tolerance)
+  if(Math.abs(a.length-b.length)>1)return false; let i=0,j=0,d=0;
+  while(i<a.length&&j<b.length){ if(a[i]===b[j]){i++;j++;continue;} if(++d>1)return false;
+    if(a.length>b.length)i++; else if(b.length>a.length)j++; else {i++;j++;} }
+  return d+(a.length-i)+(b.length-j)<=1; }
+let ROLE_N=null;
+function roleCounts(){ if(ROLE_N&&ROLE_N.n===JOBS.length)return ROLE_N.m; const m={}; JOBS.forEach(j=>(j.rs||[j.r]).forEach(r=>m[r]=(m[r]||0)+1)); ROLE_N={n:JOBS.length,m}; return m; }
+function suggest(q){
+  q=q.trim().toLowerCase(); if(!q)return [];
+  const out=[];
+  ROLES.forEach(r=>{ if(r==="Other")return;
+    const words=[r.toLowerCase(),...r.toLowerCase().split(/\s*\/\s*|\s+|[()]/).filter(Boolean),...(ROLE_ALIASES[r]||[])];
+    let best=0, hit="";
+    words.forEach(w=>{ let s=0;
+      if(w===q)s=4; else if(w.startsWith(q))s=3; else if(w.split(/\s+/).some(p=>p.startsWith(q)))s=2;
+      else if(q.length>=4&&w.split(/\s+/).some(p=>lev1(p,q)))s=1;
+      if(s>best){best=s;hit=w;} });
+    if(best) out.push({role:r,score:best,hit});
+  });
+  out.sort((a,b)=>b.score-a.score||ROLES.indexOf(a.role)-ROLES.indexOf(b.role));
+  return out.slice(0,5);
+}
+let SUG=[], SUGi=0;
+function hideSug(){ $("qsug").classList.remove("open"); SUG=[]; }
+function showSug(){
+  const raw=$("q").value.trim(), box=$("qsug"); if(!raw){hideSug();return;}
+  const cnt=roleCounts();
+  SUG=suggest(raw).map(s=>({kind:"role",...s}));
+  SUG.push({kind:"term",term:raw}); SUGi=0;
+  box.innerHTML="";
+  SUG.forEach((s,i)=>{ const b=document.createElement("button"); b.type="button"; b.className="sug"+(i===SUGi?" cur":"");
+    if(s.kind==="role"){ const sel=state.roles.has(s.role);
+      b.innerHTML=`<b>${esc(s.role)}</b><span>${sel?"Selected":(cnt[s.role]||0)+" jobs"}${s.hit&&!s.role.toLowerCase().includes(s.hit)?" · "+esc(s.hit):""}</span>`; }
+    else b.innerHTML=`<b>Search “${esc(s.term)}”</b><span>as a word in the job</span>`;
+    b.onpointerdown=b.onmousedown=e=>e.preventDefault(); // keep the keyboard open where the browser allows it
+    b.onclick=()=>pickSug(i);
+    box.appendChild(b); });
+  box.classList.add("open");
+}
+function pickSug(i){ const s=SUG[i]; if(!s)return;
+  if(s.kind==="term"){addTerm();return;}
+  state.roles.add(s.role); $("q").value=""; hideSug(); renderRoles(); updateCount(); }
+function moveSug(d){ if(!SUG.length)return; SUGi=(SUGi+d+SUG.length)%SUG.length;
+  [...$("qsug").children].forEach((b,i)=>b.classList.toggle("cur",i===SUGi)); }
+$("q").addEventListener("input",showSug);
+$("q").addEventListener("focus",showSug);
+$("q").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault(); SUG.length?pickSug(SUGi):addTerm();}
+  else if(e.key==="ArrowDown"){e.preventDefault();moveSug(1);}
+  else if(e.key==="ArrowUp"){e.preventDefault();moveSug(-1);}
+  else if(e.key==="Escape"){hideSug();} });
+// on a phone the field loses focus before the tap on a suggestion lands, so close the list a moment later
+$("q").addEventListener("blur",()=>setTimeout(()=>{ if(document.activeElement!==$("q")) hideSug(); },300));
 $("yrs").oninput=e=>{state.yrs=+e.target.value;$("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");updateCount();};
 
 function fitClass(j){if(j.y==null)return "unk";const d=j.y-state.yrs; return d<=0?"fit":d<=1?"stretch":"over";}
