@@ -743,10 +743,13 @@ function fitLabel(j){
 const modeOf=j=>j.w||"Not stated";
 
 function hay(j){return j._h||(j._h=[j.t,j.c,j.r,...(j.rs||[]),...(j.m||[])].join(" ").toLowerCase());}
+// A search term matches whole words only ("HR" must not match "three" or "through"); a Hebrew term may carry one prefix letter (ו, ה, ב...)
+function termRx(t){ const e=t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), heb=/^[֐-׿]/.test(t);
+  return new RegExp("(^|[^a-z0-9֐-׿])"+(heb?"[והבלמשכ]?":"")+e+"(?![a-z0-9֐-׿])"); }
 function filtered(){
-  const terms=[...state.terms].map(t=>t.toLowerCase());
+  const terms=[...state.terms].map(t=>termRx(t.toLowerCase()));
   return JOBS.filter(j=>
-    ((!state.roles.size&&!terms.length)||(j.rs||[j.r]).some(r=>state.roles.has(r))||terms.some(t=>hay(j).includes(t))) &&
+    ((!state.roles.size&&!terms.length)||(j.rs||[j.r]).some(r=>state.roles.has(r))||terms.some(rx=>rx.test(hay(j)))) &&
     (!state.locs.size||state.locs.has(j.rg)) &&
     (!state.modes.size||state.modes.has(modeOf(j))) &&
     (j.y==null?state.unknownYrs:(j.y-state.yrs<=state.gap)));
