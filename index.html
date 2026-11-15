@@ -618,8 +618,15 @@ window.hitchFromApp=async function(m){
   if(m.type==="login-error"){ $("lgErr").style.color=""; $("lgErr").textContent=/signup|not allowed/i.test(m.error||"")?"This Google account's email hasn't been invited yet.":m.error; return; }
   if(!UID)return;
   if(m.type==="sent"){
-    await SB.from("applications").update({status:"sent",detail:"Sent from the app"}).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
-    const j=JOBS.find(x=>x.id===m.jobId); toast(`Sent to ${j?j.c:"the company"} ✓`);
+    const j=JOBS.find(x=>x.id===m.jobId);
+    // Only a confirmation counts as sent: the company's thank-you page (by:"page") or the user saying so (by:"user").
+    // Older app versions also sent this after Close + Submit without any confirmation: keep those as "check it".
+    if(m.by!=="page"&&m.by!=="user"){
+      await SB.from("applications").update({status:"needs_you",detail:"We didn't see a confirmation from the company. Open the job and check whether it was sent."}).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
+      toast(`Not confirmed · check your application to ${j?j.c:"the company"}`); return;
+    }
+    await SB.from("applications").update({status:"sent",detail:m.by==="page"?"Sent from the app (company confirmed)":"Sent from the app (you confirmed)"}).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
+    toast(`Sent to ${j?j.c:"the company"} ✓`);
   }
 };
 async function connectGmail(){
