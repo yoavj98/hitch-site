@@ -997,16 +997,29 @@ function attachDrag(card,job){
   let sx=0,sy=0,dx=0,dy=0,drag=false,moved=false;
   const like=card.querySelector(".stamp.like"),nope=card.querySelector(".stamp.nope"),ap=card.querySelector(".stamp.apply");
   card.querySelector("[data-more]").addEventListener("click",e=>{e.stopPropagation();openSheet(job)});
-  card.addEventListener("pointerdown",e=>{ if(e.target.closest("[data-more]"))return; drag=true;moved=false;sx=e.clientX;sy=e.clientY;card.setPointerCapture(e.pointerId);card.classList.add("dragging");card.classList.remove("anim");});
-  card.addEventListener("pointermove",e=>{ if(!drag)return; dx=e.clientX-sx;dy=e.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>6)moved=true;
+  // One finger only. A second finger (e.g. Android's 3-finger screenshot) or a touch the phone takes over
+  // (pointercancel) never opens the details and never swipes; the card just goes back.
+  let pid=null, blocked=false; const down=new Set();
+  const abort=()=>{ blocked=true; if(!drag&&pid==null)return; drag=false; pid=null; dx=dy=0; card.classList.remove("dragging"); reset(); };
+  // fingers lifted: ready for the next touch
+  const lift=e=>{ down.delete(e.pointerId); if(!down.size) blocked=false; };
+  card.addEventListener("pointerdown",e=>{ if(e.target.closest("[data-more]"))return;
+    if(e.isPrimary){ down.clear(); blocked=false; }  // a new first finger: forget fingers whose lift was never reported
+    down.add(e.pointerId);
+    if(down.size>1||blocked){ abort(); return; }
+    pid=e.pointerId; drag=true;moved=false;sx=e.clientX;sy=e.clientY;card.setPointerCapture(e.pointerId);card.classList.add("dragging");card.classList.remove("anim");});
+  card.addEventListener("pointermove",e=>{ if(!drag||e.pointerId!==pid)return; dx=e.clientX-sx;dy=e.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>6)moved=true;
     card.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/18}deg)`;
     const up=-dy>Math.abs(dx); like.style.opacity=up?0:Math.max(0,Math.min(1,dx/100)); nope.style.opacity=up?0:Math.max(0,Math.min(1,-dx/100)); ap.style.opacity=up?Math.max(0,Math.min(1,-dy/120)):0;});
-  const end=()=>{ if(!drag)return; drag=false;card.classList.remove("dragging");
+  const end=e=>{ if(!drag||e.pointerId!==pid)return; drag=false;pid=null;card.classList.remove("dragging");
     if(dy<-130&&-dy>Math.abs(dx)) swipe("apply"); else if(dx>110) swipe("like"); else if(dx<-110) swipe("nope");
     else { if(!moved) openSheet(job); reset(); }
     dx=dy=0;};
   const reset=()=>{card.classList.add("anim");card.style.transform="";like.style.opacity=0;nope.style.opacity=0;ap.style.opacity=0;};
-  card.addEventListener("pointerup",end);card.addEventListener("pointercancel",end);
+  card.addEventListener("pointerup",e=>{ end(e); lift(e); });
+  card.addEventListener("pointercancel",e=>{ if(e.pointerId===pid||drag) abort(); lift(e); });
+  // a second finger on the screen (anywhere) also stops the card
+  card.addEventListener("touchstart",e=>{ if(e.touches.length>1) abort(); },{passive:true});
 }
 
 const listOf=d=>d==="like"?state.likes:d==="apply"?state.applies:state.nopes;
