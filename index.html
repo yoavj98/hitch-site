@@ -1368,19 +1368,36 @@ $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"
 $("startBtn").disabled=true; $("startBtn").style.opacity=.5;
 go("loading");
 const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats,form_url,domain,logo";
+// all pages at once (one after another took ~6 round trips on a phone)
 async function loadJobs(){
-  const out=[]; for(let from=0;;from+=1000){
-    const {data,error}=await SB.from("jobs").select(CARD_COLS).order("first_seen",{ascending:false}).range(from,from+999);
-    if(error)throw error; out.push(...data); if(data.length<1000)break; }
+  const page=from=>SB.from("jobs").select(CARD_COLS).order("first_seen",{ascending:false}).order("id").range(from,from+999);
+  const out=[]; let from=0;
+  for(;;){
+    const res=await Promise.all([0,1,2,3,4,5,6,7].map(i=>page(from+i*1000)));
+    let short=false;
+    for(const {data,error} of res){ if(error)throw error; if(short)break; out.push(...data); if(data.length<1000)short=true; }
+    if(short)break; from+=8000;
+  }
   return out.map(r=>({id:r.id,c:r.company,t:r.title,r:r.role||"Other",rs:r.roles||[r.role],ci:r.city||"Israel",rg:r.region||"Other / Unspecified",
     w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||"",dom:r.domain||"",lg:r.logo||""}));
 }
+// last job list kept on the phone: the next open starts from it at once, and the fresh list loads in the background
+const jobCache={
+  db(){return new Promise((res,rej)=>{const r=indexedDB.open("hitch",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});},
+  async get(){try{const db=await this.db();return await new Promise(res=>{const q=db.transaction("kv").objectStore("kv").get("jobs");q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(e){return null;}},
+  async set(v){try{const db=await this.db();db.transaction("kv","readwrite").objectStore("kv").put(v,"jobs");}catch(e){}}
+};
 let booted=false;
 async function boot(session){
   if(booted)return; booted=true;
   UID=session.user.id; window.__authEmail=session.user.email;
   try{
-    const [jobs,d]=await Promise.all([loadJobs(),cloudLoad()]);
+    const cached=await jobCache.get();
+    const fresh=loadJobs().then(j=>{jobCache.set({at:Date.now(),jobs:j});return j;});
+    const useCache=cached&&Array.isArray(cached.jobs)&&cached.jobs.length&&Date.now()-cached.at<7*864e5;
+    const [jobs,d]=await Promise.all([useCache?cached.jobs:fresh,cloudLoad()]);
+    // with the saved list on screen, swap in the fresh one when it arrives (the next cards come from it)
+    if(useCache) fresh.then(j=>{ JOBS=j; updateCount(); }).catch(()=>{});
     JOBS=jobs; applyCloud(d);
     renderRoles();chips($("c-locs"),REGIONS,state.locs);chips($("c-mode"),MODES,state.modes);chips($("c-gap"),GAPS,null,true);renderUnknown();
     $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
