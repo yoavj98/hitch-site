@@ -345,6 +345,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
         <p class="lead">Hitch is invite-only. Enter the email you were invited with and we'll send you a sign-in link.</p>
         <div class="form"><label>Email<input id="lgEmail" type="email" autocomplete="email"></label></div>
         <div class="form" style="margin-top:10px"><label>Password (if you set one)<input id="lgPass" type="password" autocomplete="current-password"></label></div>
+        <button type="button" id="lgForgot" style="background:none;border:none;padding:8px 0 0;color:var(--accent);font:600 14px Inter;cursor:pointer;text-align:left">No password yet, or forgot it?</button>
         <div class="form" id="lgCodeBox" style="display:none;margin-top:10px"><label>Paste the sign-in link from the email (or its code)<input id="lgCode" autocomplete="one-time-code"></label></div>
         <div class="err" id="lgErr" style="margin-top:12px"></div>
       </div>
@@ -419,7 +420,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
         <div id="cvList"></div>
         <label class="iconbtn" style="display:inline-block;margin-top:8px;cursor:pointer">+ Add a CV<input type="file" id="cvAdd" accept=".pdf,.doc,.docx" hidden></label>
         <p class="sub">With more than one CV, a swipe up asks which one to send.</p></div>
-      <button class="link" id="signOut" style="background:none;border:none;color:var(--muted);font:600 14px Inter;cursor:pointer;margin:0 0 16px 14px;padding:0;float:right">Sign out</button><button class="link" id="editProfile" style="background:none;border:none;color:var(--accent);font:600 14px Inter;cursor:pointer;margin-bottom:16px;padding:0">Edit my details and CV</button>
+      <button class="link" id="signOut" style="background:none;border:none;color:var(--muted);font:600 14px Inter;cursor:pointer;margin:0 0 16px 14px;padding:0;float:right">Sign out</button><button class="link" id="setPw" style="background:none;border:none;color:var(--muted);font:600 14px Inter;cursor:pointer;margin:0 0 16px 14px;padding:0;float:right">Password</button><button class="link" id="editProfile" style="background:none;border:none;color:var(--accent);font:600 14px Inter;cursor:pointer;margin-bottom:16px;padding:0">Edit my details and CV</button>
       <div class="err" id="setupErr"></div>
       <button class="primary" id="startBtn">Start swiping</button>
     </div>
@@ -1485,19 +1486,32 @@ $("lgPassBtn").onclick=async()=>{
   $("lgPassBtn").disabled=true;
   const {error}=await SB.auth.signInWithPassword({email,password});
   $("lgPassBtn").disabled=false;
-  if(error){$("lgErr").style.color="";$("lgErr").textContent="Email or password is wrong. (Set a password first on the website: open it with #set-password at the end.)";}
+  if(error){$("lgErr").style.color="";$("lgErr").textContent="Email or password is wrong. No password yet, or forgot it? Tap the link above.";}
 };
-// Open the site with #set-password while signed in to choose a password for the app
+// No password yet / forgot it: sign in once with the email link or code, then choose a password
+$("lgForgot").onclick=()=>{
+  const email=$("lgEmail").value.trim();
+  if(!/^\S+@\S+\.\S+$/.test(email)){$("lgErr").style.color="";$("lgErr").textContent="Enter your email first, then tap this again.";$("lgEmail").focus();return;}
+  try{localStorage.setItem("hitch_pw_next","1");}catch(e){}
+  $("lgCodeBox").style.display="none"; $("lgCode").value=""; $("lgSend").click();
+  setTimeout(()=>{ if($("lgErr").style.color) $("lgErr").textContent+=" After that you'll choose your password."; },1500);
+};
+// Choose a password: after "No password yet, or forgot it?", from the settings screen, or with #set-password
 function setPasswordPage(){
-  if(location.hash!=="#set-password")return;
+  let next=false; try{next=localStorage.getItem("hitch_pw_next")==="1";localStorage.removeItem("hitch_pw_next");}catch(e){}
+  if(location.hash==="#set-password"||next) passwordModal();
+}
+function passwordModal(){
+  if($("spA"))return;
   const bg=document.createElement("div");
   bg.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center";
   bg.innerHTML=`<div style="background:#fff;border-radius:16px;padding:22px;width:min(360px,90vw);font:15px Inter,system-ui">
-    <h3 style="margin:0 0 6px">Choose a password</h3><p style="color:#666;margin:0 0 12px">Use it to sign in to the Hitch app.</p>
+    <h3 style="margin:0 0 6px">Choose a password</h3><p style="color:#666;margin:0 0 12px">Next time, sign in with your email and this password.</p>
     <input id="spA" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:8px;border:1px solid #ddd;border-radius:10px">
     <input id="spB" type="password" placeholder="Repeat password" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ddd;border-radius:10px">
     <div id="spErr" style="color:#c0392b;min-height:18px;margin-bottom:8px"></div>
-    <button id="spSave" style="width:100%;padding:12px;border:none;border-radius:12px;background:#2f5bea;color:#fff;font-weight:700">Save password</button></div>`;
+    <button id="spSave" style="width:100%;padding:12px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-weight:700">Save password</button>
+    <button id="spLater" style="width:100%;padding:10px;border:none;background:none;color:#666;margin-top:6px">Not now</button></div>`;
   document.body.appendChild(bg);
   $("spSave").onclick=async()=>{
     const a=$("spA").value,b=$("spB").value;
@@ -1505,10 +1519,12 @@ function setPasswordPage(){
     if(a!==b){$("spErr").textContent="The two passwords don't match.";return;}
     const {error}=await SB.auth.updateUser({password:a});
     if(error){$("spErr").textContent=error.message;return;}
-    history.replaceState(null,"",location.pathname); bg.remove(); toast("Password saved. Use it in the app.");
+    if(location.hash==="#set-password") history.replaceState(null,"",location.pathname+location.search); bg.remove(); toast("Password saved ✓");
   };
+  $("spLater").onclick=()=>{ if(location.hash==="#set-password") history.replaceState(null,"",location.pathname+location.search); bg.remove(); };
 }
 $("cvAdd").onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=""; if(f) addCv(f); };
+$("setPw").onclick=()=>passwordModal();
 $("signOut").onclick=async()=>{window.__hitchUserSignedOut=true; if(IN_APP) toApp({type:"session-clear"}); await SB.auth.signOut(); try{localStorage.clear();}catch(e){} location.reload();};
 SB.auth.onAuthStateChange((ev,session)=>{
   if(session){
