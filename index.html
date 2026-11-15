@@ -323,6 +323,8 @@ html.doc-scroll .screen{min-height:auto}
 html.doc-scroll .setup{overflow:visible;flex:none}
 html.doc-scroll header{position:sticky;top:0;z-index:5;background:var(--bg)}
 html.doc-scroll .toast{position:fixed}
+/* the closed job-details panel waits just below the screen; here the page grows instead of clipping, so it would show under the filters */
+html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:none}
 .screen.swipe-cur-doc{position:relative;z-index:2;background:#fff;box-shadow:-10px 0 30px rgba(30,30,25,.08)}
 .screen.swipe-prev-doc{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1;background:#fff;overflow:hidden}
 .how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
