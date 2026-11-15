@@ -495,7 +495,9 @@ const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"#";
 const store={get(k,d){try{const v=localStorage.getItem("sj_"+k);return v?JSON.parse(v):d}catch(e){return d}},
   set(k,v){try{localStorage.setItem("sj_"+k,JSON.stringify(v))}catch(e){}}};
 function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old,terms:[...state.terms],roles:[...state.roles],locs:[...state.locs],modes:[...state.modes],yrs:state.yrs,gap:state.gap,unknownYrs:state.unknownYrs});
-  store.set("likes",state.likes.map(j=>j.id));store.set("nopes",state.nopes.map(j=>j.id));store.set("applies",state.applies.map(j=>j.id));cloudSoon();}
+  store.set("likes",state.likes.map(j=>j.id));store.set("nopes",state.nopes.map(j=>j.id));store.set("applies",state.applies.map(j=>j.id));cloudSoon();
+  // keep the "My lists" count in the header current after every swipe / undo
+  document.querySelectorAll("#hdrBtns .badge").forEach(b=>b.textContent=state.likes.length+state.applies.length);}
 (function restoreOb(){const o=store.get("ob",null);if(o)Object.assign(ob,o);})();
 // ---- account storage: Supabase ----
 const SB=window.supabase.createClient("https://qhrguhwrzoqusahzbcvi.supabase.co","sb_publishable_f2zVbN62xc6rqSrTmKp5Yg_XdlzBoZX");
