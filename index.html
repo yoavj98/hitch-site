@@ -798,8 +798,8 @@ function hideSug(){ $("qsug").classList.remove("open"); SUG=[]; }
 function showSug(){
   const raw=$("q").value.trim(), box=$("qsug"); if(!raw){hideSug();return;}
   const cnt=roleCounts();
-  SUG=suggest(raw).map(s=>({kind:"role",...s}));
-  SUG.push({kind:"term",term:raw}); SUGi=0;
+  // the word as typed comes first and is what Enter adds; matching roles are offered below it, only on a tap
+  SUG=[{kind:"term",term:raw},...suggest(raw).map(s=>({kind:"role",...s}))]; SUGi=0;
   box.innerHTML="";
   SUG.forEach((s,i)=>{ const b=document.createElement("button"); b.type="button"; b.className="sug"+(i===SUGi?" cur":"");
     if(s.kind==="role"){ const sel=state.roles.has(s.role);
