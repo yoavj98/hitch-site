@@ -669,10 +669,10 @@ window.hitchFromApp=async function(m){
     // Only a confirmation counts as sent: the company's thank-you page (by:"page") or the user saying so (by:"user").
     // Older app versions also sent this after Close + Submit without any confirmation: keep those as "check it".
     if(m.by!=="page"&&m.by!=="user"){
-      await SB.from("applications").update({status:"needs_you",detail:"We didn't see a confirmation from the company. Open the job and check whether it was sent."}).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
+      await SB.from("applications").update({status:"needs_you",detail:"We didn't see a confirmation from the company. Open the job and check whether it was sent."}).eq("user_id",UID).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
       toast(`Not confirmed · check your application to ${j?j.c:"the company"}`); return;
     }
-    await SB.from("applications").update({status:"sent",detail:m.by==="page"?"Sent from the app (company confirmed)":"Sent from the app (you confirmed)"}).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
+    await SB.from("applications").update({status:"sent",detail:m.by==="page"?"Sent from the app (company confirmed)":"Sent from the app (you confirmed)"}).eq("user_id",UID).eq("job_id",m.jobId).in("status",["queued","needs_you"]);
     toast(`Sent to ${j?j.c:"the company"} ✓`);
   }
 };
@@ -706,7 +706,7 @@ async function cloudSaveCv(file){
 async function cloudLoad(){
   const [{data:pr},{data:sw}]=await Promise.all([
     SB.from("profiles").select("*").eq("id",UID).maybeSingle(),
-    SB.from("swipes").select("job_id,action")]);
+    SB.from("swipes").select("job_id,action").eq("user_id",UID)]);
   const d={likes:[],nopes:[],applies:[]};
   (sw||[]).forEach(r=>{(r.action==="like"?d.likes:r.action==="apply"?d.applies:d.nopes).push(r.job_id);});
   if(pr){ GMAIL=pr.gmail_email||""; window.__answers=pr.answers||{};
@@ -748,7 +748,7 @@ function webApply(j){
     <button data-later style="display:block;width:100%;padding:13px;border:none;border-radius:14px;background:var(--chip);font:700 15px Inter;cursor:pointer;margin-top:8px">Later</button></div>`;
   document.body.appendChild(bg);
   bg.querySelector("[data-go]").onclick=()=>{ bg.remove();
-    if(UID) SB.from("applications").update({detail:"You opened the company's page. Not sent through Hitch."}).eq("job_id",j.id).eq("status","queued").then(()=>{},()=>{}); };
+    if(UID) SB.from("applications").update({detail:"You opened the company's page. Not sent through Hitch."}).eq("user_id",UID).eq("job_id",j.id).eq("status","queued").then(()=>{},()=>{}); };
   bg.querySelector("[data-later]").onclick=()=>bg.remove();
   bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
 }
@@ -760,7 +760,7 @@ async function saveSwipe(j,dir,inAppForm,cv){
       // the app opens the company's form filled in; the user presses Send there
       const cvLabel=cv?cv.label:null;
       await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:formUrlOf(j)||j.au||j.u,status:"queued",detail:"Opened in the app",cv_label:cvLabel},{onConflict:"user_id,job_id",ignoreDuplicates:true});
-      await SB.from("applications").update({status:"queued",detail:"Opened in the app",cv_label:cvLabel}).eq("job_id",j.id).eq("status","cancelled");
+      await SB.from("applications").update({status:"queued",detail:"Opened in the app",cv_label:cvLabel}).eq("user_id",UID).eq("job_id",j.id).eq("status","cancelled");
     } else if(dir==="apply"){
       await SB.from("applications").upsert({user_id:UID,job_id:j.id,company:j.c,title:j.t,apply_url:j.u,status:"queued"},{onConflict:"user_id,job_id",ignoreDuplicates:true});
       // Automatic sending by email is turned off (owner's decision, 2026-11-11). Applying happens in the app.
@@ -770,8 +770,8 @@ async function saveSwipe(j,dir,inAppForm,cv){
 async function removeSwipe(j,dir){
   if(!UID)return;
   try{
-    await SB.from("swipes").delete().eq("job_id",j.id);
-    if(dir==="apply") await SB.from("applications").update({status:"cancelled"}).eq("job_id",j.id);
+    await SB.from("swipes").delete().eq("user_id",UID).eq("job_id",j.id);
+    if(dir==="apply") await SB.from("applications").update({status:"cancelled"}).eq("user_id",UID).eq("job_id",j.id);
   }catch(e){}
 }
 function saveOb(){store.set("ob",ob);cloudSoon();}
@@ -1196,7 +1196,7 @@ function openSheet(j,fromSaved){
     if($("sRetry")) $("sRetry").onclick=async()=>{
       if(/consent/i.test(det||"")){ob.consent=true;store.set("ob",ob);await cloudSave();}
       if(/check your gmail sent/i.test(det||"")&&!confirm("Check your Gmail Sent folder first. Send it again anyway?"))return;
-      const {error}=await SB.from("applications").update({status:"queued",detail:"Sending again"}).eq("job_id",j.id).eq("status","needs_you");
+      const {error}=await SB.from("applications").update({status:"queued",detail:"Sending again"}).eq("user_id",UID).eq("job_id",j.id).eq("status","needs_you");
       if(error){toast("Couldn't send again");return;}
       SB.functions.invoke("send-application",{body:{job_id:j.id}}).catch(()=>{});
       closeSheet(); toast("Sending in a few seconds"); loadStatuses().then(()=>renderSaved("apply"));
@@ -1246,7 +1246,7 @@ window.addEventListener("message",async e=>{
     const done=[];
     for(const p of sent){
       const j=JOBS.find(x=>canFill(x)&&posOf(x)===p); if(!j){done.push(p);continue;}
-      const {error}=await SB.from("applications").update({status:"sent",detail:"Sent by you with Hitch Fill"}).eq("job_id",j.id).in("status",["queued","needs_you"]);
+      const {error}=await SB.from("applications").update({status:"sent",detail:"Sent by you with Hitch Fill"}).eq("user_id",UID).eq("job_id",j.id).in("status",["queued","needs_you"]);
       if(!error)done.push(p);
     }
     if(done.length){window.postMessage({type:"hitch-sent-ack",pos:done},location.origin);toast("Marked as sent");if($("s-saved").classList.contains("active"))renderSaved("apply");}
@@ -1272,7 +1272,7 @@ async function openFilled(j){
 
 const STATUS={queued:"Not sent yet",sending:"Sending…",sent:"Sent ✓",failed:"Couldn't send",needs_you:"Needs you",cancelled:"Cancelled"};
 function statusLabel(s){return `<span style="font-weight:700;color:${s==="sent"?"var(--yes)":s==="failed"||s==="needs_you"?"var(--no)":"var(--muted)"}">${STATUS[s]||"Waiting to send"}</span>`;}
-async function loadStatuses(){ if(!UID)return; const {data}=await SB.from("applications").select("job_id,status,detail,cv_label"); window.__appCv=Object.fromEntries((data||[]).map(r=>[r.job_id,r.cv_label||""])); window.__appStatus=Object.fromEntries((data||[]).map(r=>[r.job_id,r.status])); window.__appDetail=Object.fromEntries((data||[]).map(r=>[r.job_id,r.detail||""])); }
+async function loadStatuses(){ if(!UID)return; const {data}=await SB.from("applications").select("job_id,status,detail,cv_label").eq("user_id",UID); window.__appCv=Object.fromEntries((data||[]).map(r=>[r.job_id,r.cv_label||""])); window.__appStatus=Object.fromEntries((data||[]).map(r=>[r.job_id,r.status])); window.__appDetail=Object.fromEntries((data||[]).map(r=>[r.job_id,r.detail||""])); }
 let SAVED_TAB="like";
 function renderSaved(t,fresh){
   SAVED_TAB=t;
@@ -1394,7 +1394,7 @@ function handleGmailReturn(){
   if(m[1]==="ok"){
     toast("Gmail connected");
     // resend applications that were waiting for Gmail
-    SB.from("applications").update({status:"queued",detail:"Retrying after Gmail was connected"}).eq("status","needs_you").ilike("detail","%gmail%").select("job_id")
+    SB.from("applications").update({status:"queued",detail:"Retrying after Gmail was connected"}).eq("user_id",UID).eq("status","needs_you").ilike("detail","%gmail%").select("job_id")
       .then(({data})=>(data||[]).forEach(r=>SB.functions.invoke("send-application",{body:{job_id:r.job_id}}).catch(()=>{})));
     const j=pend&&JOBS.find(x=>x.id===pend);
     if(j&&GMAIL){ state.queue=[j,...state.queue.filter(x=>x!==j)]; renderDeck(); setTimeout(()=>swipe("apply"),400); }
