@@ -450,6 +450,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
       <div class="field"><label class="t">Your years of experience</label>
         <div class="range"><input type="range" min="0" max="12" value="2" id="yrs"><output id="yrsOut">2</output></div>
       </div>
+      <div class="field"><label class="t">Level</label><div class="chips" id="c-level"></div><p class="sub">From the job title, or from the years the post asks for. Jobs with no clear level always show.</p></div>
       <div class="field"><label class="t">Region</label><div class="chips" id="c-locs"></div></div>
       <div class="field"><label class="t">Work mode</label><div class="chips" id="c-mode"></div></div>
       <div class="field"><label class="t">Hide jobs that ask for more than</label><div class="chips" id="c-gap"></div></div>
@@ -525,9 +526,10 @@ let JOBS=[], META={};
 const ROLES=["Analyst","Research","Software (General)","Backend","Frontend","Full Stack","Mobile","Data / ML / Algorithms","DevOps / Cloud / IT","Security","QA / Test","Hardware / Embedded","Engineering (Industrial)","Product","Design","Sales / BD","Marketing","Customer Success / Support","Operations","Finance / Legal","HR / Recruiting","Student / Intern","Other"];
 const REGIONS=["Tel Aviv area","Center","Sharon","Haifa & North","Jerusalem","South","Remote","Other / Unspecified"];
 const MODES=["On-site","Hybrid","Remote","Not stated"];
+const LEVELS=["Student / Intern","Junior","Mid-level","Senior","Lead / Manager"];
 const GAPS=[{k:0,l:"My experience"},{k:1,l:"+1 year"},{k:2,l:"+2 years"},{k:99,l:"Show all"}];
 const ob={done:false,consent:false,profile:{first:"",last:"",email:"",phone:"",years:null,cvName:""}};
-const state={terms:new Set(),roles:new Set(),locs:new Set(),modes:new Set(),yrs:2,gap:1,unknownYrs:true,similar:false,queue:[],history:[],likes:[],nopes:[],applies:[]};
+const state={terms:new Set(),roles:new Set(),locs:new Set(),modes:new Set(),levels:new Set(),yrs:2,gap:1,unknownYrs:true,similar:false,queue:[],history:[],likes:[],nopes:[],applies:[]};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"#";
@@ -535,7 +537,7 @@ const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"#";
 // ---- persistence (best effort) ----
 const store={get(k,d){try{const v=localStorage.getItem("sj_"+k);return v?JSON.parse(v):d}catch(e){return d}},
   set(k,v){try{localStorage.setItem("sj_"+k,JSON.stringify(v))}catch(e){}}};
-function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old,terms:[...state.terms],roles:[...state.roles],locs:[...state.locs],modes:[...state.modes],yrs:state.yrs,gap:state.gap,unknownYrs:state.unknownYrs,similar:state.similar});
+function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old,terms:[...state.terms],roles:[...state.roles],locs:[...state.locs],modes:[...state.modes],levels:[...state.levels],yrs:state.yrs,gap:state.gap,unknownYrs:state.unknownYrs,similar:state.similar});
   store.set("likes",state.likes.map(j=>j.id));store.set("nopes",state.nopes.map(j=>j.id));store.set("applies",state.applies.map(j=>j.id));cloudSoon();
   // keep the "My lists" count in the header current after every swipe / undo
   document.querySelectorAll("#hdrBtns .badge").forEach(b=>b.textContent=state.likes.length+state.applies.length);}
@@ -714,7 +716,7 @@ async function cloudLoad(){
 function applyCloud(d){
   if(!d)return;
   if(d.ob){ob.done=!!d.ob.done;ob.consent=!!d.ob.consent;Object.assign(ob.profile,d.ob.profile||{});store.set("ob",ob);}
-  const p=d.prefs; if(p){store.set("prefs",p);state.terms=new Set(p.terms||[]);state.roles=new Set(p.roles||[]);state.locs=new Set(p.locs||[]);state.modes=new Set(p.modes||[]);
+  const p=d.prefs; if(p){store.set("prefs",p);state.terms=new Set(p.terms||[]);state.roles=new Set(p.roles||[]);state.locs=new Set(p.locs||[]);state.modes=new Set(p.modes||[]);state.levels=new Set(p.levels||[]);
     state.yrs=p.yrs??state.yrs;state.gap=p.gap??state.gap;state.unknownYrs=p.unknownYrs!==false;state.similar=!!p.similar;}
   ["likes","nopes","applies"].forEach(k=>{if(Array.isArray(d[k]))store.set(k,d[k]);});
 }
@@ -774,7 +776,7 @@ async function removeSwipe(j,dir){
 }
 function saveOb(){store.set("ob",ob);cloudSoon();}
 (function restore(){const p=store.get("prefs",null);if(!p)return;
-  state.terms=new Set(p.terms||[]);state.roles=new Set(p.roles||[]);state.locs=new Set(p.locs||[]);state.modes=new Set(p.modes||[]);
+  state.terms=new Set(p.terms||[]);state.roles=new Set(p.roles||[]);state.locs=new Set(p.locs||[]);state.modes=new Set(p.modes||[]);state.levels=new Set(p.levels||[]);
   state.yrs=p.yrs??2;state.gap=p.gap??1;state.unknownYrs=p.unknownYrs!==false;state.similar=!!p.similar;})();
 
 function colorOf(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;return `hsl(${h%360} 55% 42%)`;}
@@ -927,6 +929,7 @@ function filtered(){
     ((!state.roles.size&&!terms.length)||(j.rs||[j.r]).some(r=>state.roles.has(r))||terms.some(rx=>rx.test(hay(j)))||(sim.length&&sim.some(rx=>rx.test(j._tl||(j._tl=(j.t||"").toLowerCase()))))) &&
     (!state.locs.size||state.locs.has(j.rg)) &&
     (!state.modes.size||state.modes.has(modeOf(j))) &&
+    (!state.levels.size||!j.lv||state.levels.has(j.lv)) &&
     (j.y==null?state.unknownYrs:(j.y-state.yrs<=state.gap)));
 }
 function updateCount(){ if(!JOBS.length)return; const n=filtered().length;
@@ -1533,13 +1536,13 @@ async function readCv(file){
 // ---- boot ----
 renderRoles();
 chips($("c-locs"),REGIONS,state.locs);
-chips($("c-mode"),MODES,state.modes);
+chips($("c-mode"),MODES,state.modes);chips($("c-level"),LEVELS,state.levels);
 chips($("c-gap"),GAPS,null,true);
 renderUnknown();renderSimilar();renderTheme();
 $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
 $("startBtn").disabled=true; $("startBtn").style.opacity=.5;
 go("loading");
-const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,must,url,size,location,first_seen,updated,apply_url,ats,form_url,domain,logo";
+const CARD_COLS="id,company,title,role,roles,city,region,workplace,years,level,must,url,size,location,first_seen,updated,apply_url,ats,form_url,domain,logo";
 // all pages at once (one after another took ~6 round trips on a phone)
 async function loadJobs(){
   const page=from=>SB.from("jobs").select(CARD_COLS).order("first_seen",{ascending:false}).order("id").range(from,from+999);
@@ -1551,7 +1554,7 @@ async function loadJobs(){
     if(short)break; from+=8000;
   }
   return out.map(r=>({id:r.id,c:r.company,t:r.title,r:r.role||"Other",rs:r.roles||[r.role],ci:r.city||"Israel",rg:r.region||"Other / Unspecified",
-    w:r.workplace||"",y:r.years,m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||"",dom:r.domain||"",lg:r.logo||""}));
+    w:r.workplace||"",y:r.years,lv:r.level||"",m:r.must||[],u:r.url,s:r.size||"",loc:r.location||"",fs:r.first_seen||"",up:r.updated||"",au:r.apply_url||"",ats:r.ats||"",fu:r.form_url||"",dom:r.domain||"",lg:r.logo||""}));
 }
 // last job list kept on the phone: the next open starts from it at once, and the fresh list loads in the background
 const jobCache={
@@ -1571,7 +1574,7 @@ async function boot(session){
     // with the saved list on screen, swap in the fresh one when it arrives (the next cards come from it)
     if(useCache) fresh.then(j=>{ JOBS=j; updateCount(); }).catch(()=>{});
     JOBS=jobs; applyCloud(d);
-    renderRoles();chips($("c-locs"),REGIONS,state.locs);chips($("c-mode"),MODES,state.modes);chips($("c-gap"),GAPS,null,true);renderUnknown();renderSimilar();renderTheme();
+    renderRoles();chips($("c-locs"),REGIONS,state.locs);chips($("c-mode"),MODES,state.modes);chips($("c-level"),LEVELS,state.levels);chips($("c-gap"),GAPS,null,true);renderUnknown();renderSimilar();renderTheme();
     $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
     const byId=new Map(JOBS.map(j=>[j.id,j]));
     state.likes=store.get("likes",[]).map(id=>byId.get(id)).filter(Boolean);
