@@ -1372,13 +1372,45 @@ function fillConfirm(){
   document.querySelector("#s-confirm h1").textContent=ob.done?"Your details":"Is this you?";
   $("cfNext").textContent=ob.done?"Save":"Looks right";
 }
+// Sign-up field checks
+const NAME_RE=/^[\p{L}][\p{L}\p{M}' .\-]{0,38}[\p{L}\p{M}.]$|^[\p{L}]$/u;
+const EMAIL_RE=/^[A-Za-z0-9._%+\-]+@[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+// Israeli numbers: mobile 05X-XXXXXXX, landline 0X-XXXXXXX, 07X-XXXXXXX; +972 is turned into 0. Other countries: + and 8-15 digits.
+function normPhone(raw){
+  const s=(raw||"").trim(); if(/[^\d+\-\s().]/.test(s)) return null;
+  let d=s.replace(/\D/g,""); const plus=s.startsWith("+")||s.startsWith("00");
+  if(s.startsWith("00")) d=d.slice(2);
+  if(plus||d.startsWith("972")){
+    if(d.startsWith("972")){ d="0"+d.slice(3).replace(/^0/,""); }
+    else return d.length>=8&&d.length<=15?"+"+d:null;
+  }
+  if(/^05\d{8}$/.test(d)) return d.slice(0,3)+"-"+d.slice(3);
+  if(/^07\d{8}$/.test(d)) return d.slice(0,3)+"-"+d.slice(3);
+  if(/^0[2-489]\d{7}$/.test(d)) return d.slice(0,2)+"-"+d.slice(2);
+  return null;
+}
+$("fYears").setAttribute("max","50"); $("fYears").setAttribute("step","1");
+$("fYears").addEventListener("input",e=>{ const v=e.target.value.replace(/\D/g,"").slice(0,2); if(v!==e.target.value) e.target.value=v; });
+$("fPhone").setAttribute("maxlength","20");
+$("fPhone").addEventListener("input",e=>{ const v=e.target.value.replace(/[^\d+\-\s().]/g,""); if(v!==e.target.value) e.target.value=v; });
+["fFirst","fLast"].forEach(id=>$(id).setAttribute("maxlength","40"));
+const cfFail=(id,msg)=>{ $("cfErr").textContent=msg; $(id).focus(); return false; };
 $("cfNext").onclick=()=>{
   const p=ob.profile;
-  p.first=$("fFirst").value.trim(); p.last=$("fLast").value.trim(); p.email=$("fEmail").value.trim(); p.phone=$("fPhone").value.trim();
-  const y=$("fYears").value.trim(); p.years=y===""?null:Math.max(0,Math.min(40,parseInt(y,10)||0));
-  if(!p.first||!p.last){$("cfErr").textContent="Please add your first and last name.";return;}
-  if(!/^\S+@\S+\.\S+$/.test(p.email)){$("cfErr").textContent="Please check your email address.";return;}
-  if(p.phone.replace(/\D/g,"").length<9){$("cfErr").textContent="Please check your phone number.";return;}
+  const first=$("fFirst").value.trim().replace(/\s+/g," "), last=$("fLast").value.trim().replace(/\s+/g," "), email=$("fEmail").value.trim(), phoneRaw=$("fPhone").value.trim();
+  const y=$("fYears").value.trim();
+  if(!first) return cfFail("fFirst","Please add your first name.");
+  if(!NAME_RE.test(first)) return cfFail("fFirst","First name can only have letters (no numbers or symbols).");
+  if(!last) return cfFail("fLast","Please add your last name.");
+  if(!NAME_RE.test(last)) return cfFail("fLast","Last name can only have letters (no numbers or symbols).");
+  if(!EMAIL_RE.test(email)) return cfFail("fEmail","Please check your email address, for example name@gmail.com.");
+  const phone=normPhone(phoneRaw);
+  if(!phone) return cfFail("fPhone","Please check your phone number, for example 050-1234567.");
+  if(y!==""&&!/^\d{1,2}$/.test(y)) return cfFail("fYears","Years of experience should be a whole number, for example 3.");
+  if(y!==""&&+y>50) return cfFail("fYears","Years of experience can't be more than 50.");
+  $("cfErr").textContent="";
+  p.first=first; p.last=last; p.email=email; p.phone=phone; $("fPhone").value=phone;
+  p.years=y===""?null:+y;
   if(p.years!=null){state.yrs=Math.min(12,p.years);$("yrs").value=state.yrs;$("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");}
   saveOb(); updateCount(); if(ob.done){ if(!goBack()) go("deck"); toast("Saved"); } else go("setup");
 };
