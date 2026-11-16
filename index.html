@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hitch</title>
+<meta name="theme-color" content="#ffffff">
+<script>
+// Appearance: "light" | "dark" | "auto" (same as the phone). Kept on this device.
+function hitchTheme(){try{return JSON.parse(localStorage.getItem("sj_theme"))||"light"}catch(e){return "light"}}
+function applyTheme(t){t=t||hitchTheme();const dark=t==="dark"||(t==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme=dark?"dark":"light";
+  const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=dark?"#151614":"#ffffff";
+  try{const msg=JSON.stringify({type:"theme",dark});if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(msg);}catch(e){}
+  return dark;}
+applyTheme();
+try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(hitchTheme()==="auto")applyTheme();});}catch(e){}
+</script>
 <meta name="robots" content="noindex,nofollow">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -329,6 +341,30 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
 .screen.swipe-cur-doc{position:relative;z-index:2;background:#fff;box-shadow:-10px 0 30px rgba(30,30,25,.08)}
 .screen.swipe-prev-doc{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1;background:#fff;overflow:hidden}
 .how div>span:last-child{color:var(--muted);font-size:14px}.how b{color:var(--ink);font-weight:600;font-size:15px}
+/* Buttons and boxes take the page's text color (browsers default them to black) */
+:where(button,input,select,textarea){color:var(--ink)}
+/* Dark mode */
+:root[data-theme="dark"]{color-scheme:dark;
+  --bg:#151614; --surface:#1d1f1c; --ink:#ecebe6; --ink2:#c8c6bf; --muted:#8f8d86; --line:#30322e;
+  --accent:#6b7f6f; --accent-ink:#b9c8bc; --accent-soft:#242a25; --yes:#7a907e; --no:#c98a80; --warn:#c9a86e; --chip:#262825;}
+[data-theme="dark"] .iconbtn,[data-theme="dark"] .chip,[data-theme="dark"] .form input,[data-theme="dark"] #q,[data-theme="dark"] .qsug,[data-theme="dark"] .sug,
+[data-theme="dark"] .act,[data-theme="dark"] .tabs button,[data-theme="dark"] .stat,[data-theme="dark"] .how div,[data-theme="dark"] .sh-acts .act,[data-theme="dark"] .backbtn,
+[data-theme="dark"] .screen.swipe-prev,[data-theme="dark"] .screen.swipe-cur,[data-theme="dark"] .screen.swipe-cur-doc,[data-theme="dark"] .screen.swipe-prev-doc{background-color:var(--surface)}
+[data-theme="dark"] .form select{background-color:var(--surface)}
+[data-theme="dark"] .chip.on,[data-theme="dark"] .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+[data-theme="dark"] .applybar,[data-theme="dark"] .toast{background:#30342f;color:#fff}
+[data-theme="dark"] .stamp{background:rgba(29,31,28,.92)}
+[data-theme="dark"] .cv,[data-theme="dark"] .drop{border-color:#4a4c47}
+[data-theme="dark"] .cv.has,[data-theme="dark"] .drop.has,[data-theme="dark"] .status.applied,[data-theme="dark"] .exp.fit{background:#1f3329;color:#86d3ad}
+[data-theme="dark"] .drop.has{border-color:var(--yes)}
+[data-theme="dark"] .status.saved{background:#1f2741;color:#9db2ff}
+[data-theme="dark"] .exp.stretch{background:#3a2e18;color:#e2b464}
+[data-theme="dark"] .exp.over,[data-theme="dark"] .b-no{background:#3b2321;color:#f0a19a}
+[data-theme="dark"] .card{box-shadow:0 1px 2px rgba(0,0,0,.3),0 14px 34px rgba(0,0,0,.35)}
+[data-theme="dark"] .sheet-bg{background:rgba(0,0,0,.55)}
+[data-theme="dark"] .form input.found{border-color:#4f6a58!important}
+[data-theme="dark"] .logo-img{background:#fff}
+[data-theme="dark"] .primary{color:var(--bg)}
 </style>
 </head>
 <body>
@@ -351,7 +387,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
         <div class="err" id="lgErr" style="margin-top:12px"></div>
       </div>
       <div class="spacer"></div>
-      <button class="primary" id="lgGoogle" style="margin-bottom:10px;background:#fff;color:var(--ink);border:1px solid var(--line)">Continue with Google</button>
+      <button class="primary" id="lgGoogle" style="margin-bottom:10px;background:var(--surface);color:var(--ink);border:1px solid var(--line)">Continue with Google</button>
       <button class="primary" id="lgPassBtn" style="margin-bottom:10px">Sign in with password</button>
       <button class="primary" id="lgSend" style="background:var(--chip);color:var(--ink)">Send me a sign-in link</button>
     </div>
@@ -418,6 +454,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
       <div class="field"><label class="t">Work mode</label><div class="chips" id="c-mode"></div></div>
       <div class="field"><label class="t">Hide jobs that ask for more than</label><div class="chips" id="c-gap"></div></div>
       <div class="field"><label class="t">Jobs that don't state years</label><div class="chips" id="c-unk"></div></div>
+      <div class="field"><label class="t">Appearance</label><div class="chips" id="c-theme"></div></div>
       <div class="field" id="cvsField"><label class="t">My CVs</label>
         <div id="cvList"></div>
         <label class="iconbtn" style="display:inline-block;margin-top:8px;cursor:pointer">+ Add a CV<input type="file" id="cvAdd" accept=".pdf,.doc,.docx" hidden></label>
@@ -767,6 +804,11 @@ function renderSimilar(){
   [{k:false,l:"Exact words only"},{k:true,l:"Also similar titles"}].forEach(o=>{const b=document.createElement("button");b.className="chip"+(state.similar===o.k?" on":"");b.textContent=o.l;
     b.onclick=()=>{state.similar=o.k;[...el.children].forEach(x=>x.classList.toggle("on",x===b));b.blur();repaint(el);simInfo();updateCount();};el.appendChild(b);});
   simInfo();
+}
+function renderTheme(){
+  const el=$("c-theme"); if(!el)return; el.innerHTML=""; const cur=hitchTheme();
+  [{k:"light",l:"Light"},{k:"dark",l:"Dark"},{k:"auto",l:"Same as phone"}].forEach(o=>{const b=document.createElement("button");b.className="chip"+(cur===o.k?" on":"");b.textContent=o.l;
+    b.onclick=()=>{store.set("theme",o.k);applyTheme(o.k);[...el.children].forEach(x=>x.classList.toggle("on",x===b));b.blur();repaint(el);};el.appendChild(b);});
 }
 function simInfo(){
   const terms=[...state.terms], ex=terms.map(t=>[t,relatedOf(t)]).filter(x=>x[1].length);
@@ -1493,7 +1535,7 @@ renderRoles();
 chips($("c-locs"),REGIONS,state.locs);
 chips($("c-mode"),MODES,state.modes);
 chips($("c-gap"),GAPS,null,true);
-renderUnknown();renderSimilar();
+renderUnknown();renderSimilar();renderTheme();
 $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
 $("startBtn").disabled=true; $("startBtn").style.opacity=.5;
 go("loading");
@@ -1529,7 +1571,7 @@ async function boot(session){
     // with the saved list on screen, swap in the fresh one when it arrives (the next cards come from it)
     if(useCache) fresh.then(j=>{ JOBS=j; updateCount(); }).catch(()=>{});
     JOBS=jobs; applyCloud(d);
-    renderRoles();chips($("c-locs"),REGIONS,state.locs);chips($("c-mode"),MODES,state.modes);chips($("c-gap"),GAPS,null,true);renderUnknown();renderSimilar();
+    renderRoles();chips($("c-locs"),REGIONS,state.locs);chips($("c-mode"),MODES,state.modes);chips($("c-gap"),GAPS,null,true);renderUnknown();renderSimilar();renderTheme();
     $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
     const byId=new Map(JOBS.map(j=>[j.id,j]));
     state.likes=store.get("likes",[]).map(id=>byId.get(id)).filter(Boolean);
@@ -1606,13 +1648,13 @@ function passwordModal(){
   if($("spA"))return;
   const bg=document.createElement("div");
   bg.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center";
-  bg.innerHTML=`<div style="background:#fff;border-radius:16px;padding:22px;width:min(360px,90vw);font:15px Inter,system-ui">
-    <h3 style="margin:0 0 6px">Choose a password</h3><p style="color:#666;margin:0 0 12px">Next time, sign in with your email and this password.</p>
-    <input id="spA" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:8px;border:1px solid #ddd;border-radius:10px">
-    <input id="spB" type="password" placeholder="Repeat password" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #ddd;border-radius:10px">
+  bg.innerHTML=`<div style="background:var(--surface);color:var(--ink);border-radius:16px;padding:22px;width:min(360px,90vw);font:15px Inter,system-ui">
+    <h3 style="margin:0 0 6px">Choose a password</h3><p style="color:var(--muted);margin:0 0 12px">Next time, sign in with your email and this password.</p>
+    <input id="spA" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg)">
+    <input id="spB" type="password" placeholder="Repeat password" autocomplete="new-password" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)">
     <div id="spErr" style="color:#c0392b;min-height:18px;margin-bottom:8px"></div>
     <button id="spSave" style="width:100%;padding:12px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-weight:700">Save password</button>
-    <button id="spLater" style="width:100%;padding:10px;border:none;background:none;color:#666;margin-top:6px">Not now</button></div>`;
+    <button id="spLater" style="width:100%;padding:10px;border:none;background:none;color:var(--muted);margin-top:6px">Not now</button></div>`;
   document.body.appendChild(bg);
   $("spSave").onclick=async()=>{
     const a=$("spA").value,b=$("spB").value;
