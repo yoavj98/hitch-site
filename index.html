@@ -323,6 +323,8 @@ header{padding:18px 22px 10px}
 .count{margin:4px 0 20px}
 .backbtn{display:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink2);cursor:pointer;place-items:center;padding:0}
 .backbtn.show{display:grid}
+.sheet-body>.co{padding-right:44px}.sharebtn{position:absolute;top:14px;right:16px;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink2);display:grid;place-items:center;cursor:pointer;padding:0;z-index:2}
+.sharebtn svg{width:18px;height:18px}
 .screen.swipe-prev{display:flex;position:absolute;left:0;right:0;bottom:0;z-index:1;background:#fff}
 .screen.swipe-cur{position:absolute;left:0;right:0;bottom:0;z-index:2;background:#fff;box-shadow:-10px 0 30px rgba(30,30,25,.08)}
 .cfcv{display:none;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:16px;cursor:pointer}
@@ -504,6 +506,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
   <div class="sheet-bg" id="sheetBg"></div>
   <div class="sheet" id="sheet">
     <div class="grab"></div>
+    <button class="sharebtn" id="sShare" aria-label="Share this job" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button>
     <div class="sheet-body" id="sheetBody"></div>
     <div class="sheet-actions" id="sheetActions">
       <button class="b-no" id="sNo">Pass</button>
@@ -648,6 +651,7 @@ async function openInApp(j,cv){
 window.hitchFromApp=async function(m){
   if(!m)return;
   if(m.type==="session"){ const {error}=await SB.auth.setSession({access_token:m.access_token,refresh_token:m.refresh_token}); if(error){$("lgErr").style.color="";$("lgErr").textContent="Google sign-in didn't work: "+error.message;} return; }
+  if(m.type==="share-ok"){ shareAck=true; return; }
   if(m.type==="ping"){ const {data}=await SB.auth.getSession(); toApp({type:"pong",inApp:IN_APP,signedIn:!!data.session}); return; }
   if(m.type==="restore"){
     const {data}=await SB.auth.getSession();
@@ -1170,6 +1174,26 @@ function loadDesc(id){
 }
 
 let sheetJob=null, sheetFromSaved=false;
+// Share a job: the company's own job page, so it works for anyone (Hitch itself is invite-only)
+let shareAck=false;
+async function copyShare(text){
+  try{ await navigator.clipboard.writeText(text); toast("Link copied"); }
+  catch(e){ const t=document.createElement("textarea"); t.value=text; t.readOnly=true; t.style.cssText="position:fixed;top:0;left:-9999px"; document.body.appendChild(t); t.select();
+    try{ document.execCommand("copy"); toast("Link copied"); }catch(e2){ toast("Couldn't copy the link"); } t.remove(); }
+}
+async function shareJob(j){
+  if(!j)return;
+  const url=j.u||j.au||"", title=j.t+" at "+j.c, text=title;
+  if(IN_APP&&toApp({type:"share",title,text,url})){
+    // copy now, while the tap still counts (iPhone blocks copying later); say so only if the share sheet didn't open
+    shareAck=false; const t=document.createElement("textarea"); t.value=text+"\n"+url; t.readOnly=true; t.style.cssText="position:fixed;top:0;left:-9999px"; document.body.appendChild(t); t.select();
+    let ok=false; try{ ok=document.execCommand("copy"); }catch(e){} t.remove();
+    setTimeout(()=>{ if(!shareAck) toast(ok?"Link copied":"Couldn't share. Update the app."); },700); return;
+  }
+  if(navigator.share){ try{ await navigator.share({title,text,url}); }catch(e){ if(e&&e.name!=="AbortError") copyShare(text+"\n"+url); } return; }
+  copyShare(text+"\n"+url);
+}
+$("sShare").onclick=()=>shareJob(sheetJob);
 function openSheet(j,fromSaved){
   sheetJob=j;
   $("sheetBody").innerHTML=`
