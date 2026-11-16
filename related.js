@@ -1,0 +1,88 @@
+// Shared by the Hitch app (hitch-site) and the admin site (hitch-admin): similar job titles for a search word.
+// Change the list here; both sites load this file.
+function relWord(t){ const e=t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  return new RegExp("(^|[^a-z0-9֐-׿])"+e+"(?![a-z0-9֐-׿])"); }
+// Similar job titles for a typed search word (used only when "Also similar titles" is on).
+// Directed: Data Scientist also shows Data Analyst, and the other way round only where it makes sense.
+const RELATED={
+  "data scientist":["data analyst","machine learning engineer","ml engineer","applied scientist","research scientist","algorithm engineer","algorithm developer","ai engineer","analytics engineer","מדען נתונים","דאטה סיינטיסט"],
+  "data analyst":["bi analyst","bi developer","business analyst","product analyst","analytics engineer","data scientist","אנליסט נתונים","אנליסט"],
+  "data engineer":["big data engineer","etl developer","analytics engineer","bi developer","backend engineer","data platform engineer"],
+  "machine learning engineer":["ml engineer","data scientist","ai engineer","algorithm engineer","mlops engineer","computer vision engineer","deep learning engineer","nlp engineer"],
+  "ml engineer":["machine learning engineer","data scientist","ai engineer","algorithm engineer","mlops engineer","computer vision engineer"],
+  "ai engineer":["machine learning engineer","ml engineer","llm engineer","data scientist","algorithm engineer","nlp engineer"],
+  "algorithm engineer":["algorithm developer","computer vision engineer","machine learning engineer","data scientist","research engineer"],
+  "bi analyst":["data analyst","bi developer","business analyst","analytics engineer"],
+  "business analyst":["data analyst","product analyst","systems analyst","bi analyst","אנליסט עסקי"],
+  "product analyst":["data analyst","business analyst","bi analyst","growth analyst"],
+  "backend developer":["backend engineer","server side developer","full stack developer","python developer","java developer","node.js developer","go developer"],
+  "backend engineer":["backend developer","server side developer","full stack engineer","python developer","java developer"],
+  "frontend developer":["frontend engineer","react developer","web developer","ui developer","javascript developer","full stack developer"],
+  "frontend engineer":["frontend developer","react developer","web developer","ui developer","full stack engineer"],
+  "full stack developer":["full stack engineer","fullstack developer","frontend developer","backend developer","web developer"],
+  "full stack engineer":["full stack developer","fullstack engineer","frontend engineer","backend engineer"],
+  "software engineer":["software developer","backend engineer","frontend engineer","full stack engineer","programmer","מהנדס תוכנה","מפתח תוכנה"],
+  "software developer":["software engineer","backend developer","frontend developer","full stack developer","programmer","מפתח תוכנה"],
+  "mobile developer":["ios developer","android developer","react native developer","flutter developer","mobile engineer"],
+  "ios developer":["mobile developer","swift developer","mobile engineer"],
+  "android developer":["mobile developer","kotlin developer","mobile engineer"],
+  "devops engineer":["sre","site reliability engineer","platform engineer","cloud engineer","infrastructure engineer","devsecops engineer"],
+  "sre":["site reliability engineer","devops engineer","platform engineer","production engineer"],
+  "cloud engineer":["devops engineer","cloud architect","platform engineer","infrastructure engineer"],
+  "system administrator":["it administrator","sysadmin","it engineer","network administrator","helpdesk","מנהל רשת","איש סיסטם"],
+  "it":["helpdesk","system administrator","it support","it technician","מחשוב","תמיכה טכנית"],
+  "qa engineer":["qa automation engineer","automation engineer","test engineer","sdet","qa analyst","manual qa","בודק תוכנה","בודקת תוכנה"],
+  "qa automation engineer":["automation engineer","sdet","qa engineer","test automation"],
+  "qa":["qa engineer","automation engineer","test engineer","sdet","בודק תוכנה","בדיקות תוכנה"],
+  "product manager":["product owner","technical product manager","product lead","associate product manager","מנהל מוצר","מנהלת מוצר"],
+  "product owner":["product manager","technical product manager","business analyst"],
+  "project manager":["program manager","delivery manager","implementation manager","operations manager","מנהל פרויקטים","מנהלת פרויקטים"],
+  "product designer":["ux designer","ui designer","ux/ui designer","ui/ux designer","ux researcher","interaction designer","מעצב ux","מעצבת ux"],
+  "ux designer":["product designer","ui designer","ux/ui designer","ui/ux designer","ux researcher"],
+  "ui designer":["product designer","ux designer","ux/ui designer","ui/ux designer","graphic designer","visual designer"],
+  "graphic designer":["visual designer","ui designer","motion designer","creative designer","מעצב גרפי","מעצבת גרפית"],
+  "security engineer":["security analyst","appsec engineer","application security engineer","cloud security engineer","security researcher","penetration tester"],
+  "security researcher":["vulnerability researcher","malware researcher","threat researcher","security analyst","penetration tester","חוקר סייבר","חוקרת סייבר"],
+  "security analyst":["soc analyst","cyber analyst","threat intelligence analyst","security engineer","incident response"],
+  "soc analyst":["security analyst","cyber analyst","incident response","threat intelligence analyst"],
+  "penetration tester":["pentester","red team","security researcher","offensive security","ethical hacker"],
+  "intelligence":["osint","intelligence analyst","threat intelligence","research analyst","מודיעין","אנליסט מודיעין"],
+  "intelligence analyst":["osint analyst","threat intelligence analyst","research analyst","intelligence","אנליסט מודיעין"],
+  "hardware engineer":["electrical engineer","embedded engineer","board design engineer","fpga engineer","asic engineer","מהנדס חומרה","מהנדסת חומרה"],
+  "embedded engineer":["embedded software engineer","firmware engineer","embedded developer","c developer","hardware engineer"],
+  "firmware engineer":["embedded engineer","embedded software engineer","embedded developer"],
+  "electrical engineer":["hardware engineer","electronics engineer","board design engineer","מהנדס חשמל","מהנדסת חשמל"],
+  "mechanical engineer":["mechanical designer","mechanical design engineer","מהנדס מכונות","מהנדסת מכונות"],
+  "account executive":["account manager","sales manager","business development","sdr","bdr","sales representative"],
+  "account manager":["account executive","customer success manager","key account manager","sales manager"],
+  "sdr":["bdr","sales development representative","business development representative","account executive","inside sales"],
+  "sales":["account executive","account manager","sales manager","business development","sdr","bdr","מכירות"],
+  "customer success manager":["customer success","account manager","onboarding manager","implementation manager","customer support"],
+  "customer success":["customer success manager","account manager","onboarding","implementation","customer support"],
+  "support engineer":["technical support","customer support engineer","tier 2 support","application support","solutions engineer"],
+  "solutions engineer":["sales engineer","presales engineer","solutions architect","support engineer"],
+  "marketing manager":["product marketing manager","growth manager","performance marketing manager","digital marketing manager","content manager","מנהל שיווק","מנהלת שיווק"],
+  "product marketing manager":["marketing manager","product marketing","growth manager","content manager"],
+  "growth":["growth manager","performance marketing","user acquisition","marketing manager","ppc"],
+  "content writer":["copywriter","content manager","technical writer","קופירייטר","כותב תוכן"],
+  "technical writer":["content writer","documentation","copywriter"],
+  "recruiter":["talent acquisition","technical recruiter","sourcer","talent acquisition partner","רכז גיוס","רכזת גיוס","מגייס","מגייסת"],
+  "hr":["hrbp","hr manager","people partner","human resources","talent acquisition","משאבי אנוש"],
+  "hrbp":["hr business partner","people partner","hr manager","hr generalist"],
+  "accountant":["bookkeeper","controller","financial analyst","רואה חשבון","מנהל חשבונות","מנהלת חשבונות","חשב"],
+  "controller":["accountant","financial controller","finance manager","חשב"],
+  "financial analyst":["fp&a","finance analyst","business analyst","controller"],
+  "lawyer":["legal counsel","counsel","attorney","legal advisor","עורך דין","עורכת דין","יועץ משפטי"],
+  "operations manager":["project manager","program manager","operations","office manager","תפעול"],
+  "office manager":["administrative assistant","office administrator","executive assistant","מנהלת משרד","אדמיניסטרציה"],
+  "student":["intern","internship","junior","graduate","סטודנט","סטודנטית","משרת סטודנט"],
+  "junior":["entry level","graduate","student","intern","ג'וניור"],
+};
+const SENIORITY=/\b(senior|sr\.?|junior|jr\.?|lead|principal|staff|head of|chief|associate|mid|mid-level|ראש צוות|בכיר|בכירה|זוטר|זוטרה)\b\s*/g;
+function relatedOf(t){
+  t=t.toLowerCase().trim(); const core=t.replace(SENIORITY,"").replace(/\s+/g," ").trim();
+  const out=new Set();
+  for(const k in RELATED){ if(k===t||k===core||(k.includes(" ")&&relWord(k).test(t))) RELATED[k].forEach(x=>out.add(x)); }
+  out.delete(t); out.delete(core);
+  return [...out];
+}
