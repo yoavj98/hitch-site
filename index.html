@@ -410,6 +410,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
       <p class="lead">Pick what fits. Leave a group empty to see everything.</p><p class="count" id="dataInfo">Loading jobs…</p>
       <div class="field"><label class="t">Search</label><input id="q" type="search" placeholder="Type a role or skill and press Enter" autocomplete="off" style="width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:13px;font:500 16px Inter;color:var(--ink)"><div class="qsug" id="qsug"></div><p class="sub">Start typing, for example HR, analyst or Python, and pick from the list.</p></div>
       <div class="field"><label class="t">Roles</label><div class="chips" id="c-roles"></div></div>
+      <div class="field" id="simField"><label class="t">Similar job titles</label><div class="chips" id="c-sim"></div><p class="sub" id="simInfo"></p></div>
       <div class="field"><label class="t">Your years of experience</label>
         <div class="range"><input type="range" min="0" max="12" value="2" id="yrs"><output id="yrsOut">2</output></div>
       </div>
@@ -488,7 +489,7 @@ const REGIONS=["Tel Aviv area","Center","Sharon","Haifa & North","Jerusalem","So
 const MODES=["On-site","Hybrid","Remote","Not stated"];
 const GAPS=[{k:0,l:"My experience"},{k:1,l:"+1 year"},{k:2,l:"+2 years"},{k:99,l:"Show all"}];
 const ob={done:false,consent:false,profile:{first:"",last:"",email:"",phone:"",years:null,cvName:""}};
-const state={terms:new Set(),roles:new Set(),locs:new Set(),modes:new Set(),yrs:2,gap:1,unknownYrs:true,queue:[],history:[],likes:[],nopes:[],applies:[]};
+const state={terms:new Set(),roles:new Set(),locs:new Set(),modes:new Set(),yrs:2,gap:1,unknownYrs:true,similar:false,queue:[],history:[],likes:[],nopes:[],applies:[]};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"#";
@@ -496,7 +497,7 @@ const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"#";
 // ---- persistence (best effort) ----
 const store={get(k,d){try{const v=localStorage.getItem("sj_"+k);return v?JSON.parse(v):d}catch(e){return d}},
   set(k,v){try{localStorage.setItem("sj_"+k,JSON.stringify(v))}catch(e){}}};
-function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old,terms:[...state.terms],roles:[...state.roles],locs:[...state.locs],modes:[...state.modes],yrs:state.yrs,gap:state.gap,unknownYrs:state.unknownYrs});
+function persist(){const old=store.get("prefs",{})||{};store.set("prefs",{...old,terms:[...state.terms],roles:[...state.roles],locs:[...state.locs],modes:[...state.modes],yrs:state.yrs,gap:state.gap,unknownYrs:state.unknownYrs,similar:state.similar});
   store.set("likes",state.likes.map(j=>j.id));store.set("nopes",state.nopes.map(j=>j.id));store.set("applies",state.applies.map(j=>j.id));cloudSoon();
   // keep the "My lists" count in the header current after every swipe / undo
   document.querySelectorAll("#hdrBtns .badge").forEach(b=>b.textContent=state.likes.length+state.applies.length);}
@@ -676,7 +677,7 @@ function applyCloud(d){
   if(!d)return;
   if(d.ob){ob.done=!!d.ob.done;ob.consent=!!d.ob.consent;Object.assign(ob.profile,d.ob.profile||{});store.set("ob",ob);}
   const p=d.prefs; if(p){store.set("prefs",p);state.terms=new Set(p.terms||[]);state.roles=new Set(p.roles||[]);state.locs=new Set(p.locs||[]);state.modes=new Set(p.modes||[]);
-    state.yrs=p.yrs??state.yrs;state.gap=p.gap??state.gap;state.unknownYrs=p.unknownYrs!==false;}
+    state.yrs=p.yrs??state.yrs;state.gap=p.gap??state.gap;state.unknownYrs=p.unknownYrs!==false;state.similar=!!p.similar;}
   ["likes","nopes","applies"].forEach(k=>{if(Array.isArray(d[k]))store.set(k,d[k]);});
 }
 // "Which CV for this job?" - shown after a swipe up when there is more than one CV
@@ -736,7 +737,7 @@ async function removeSwipe(j,dir){
 function saveOb(){store.set("ob",ob);cloudSoon();}
 (function restore(){const p=store.get("prefs",null);if(!p)return;
   state.terms=new Set(p.terms||[]);state.roles=new Set(p.roles||[]);state.locs=new Set(p.locs||[]);state.modes=new Set(p.modes||[]);
-  state.yrs=p.yrs??2;state.gap=p.gap??1;state.unknownYrs=p.unknownYrs!==false;})();
+  state.yrs=p.yrs??2;state.gap=p.gap??1;state.unknownYrs=p.unknownYrs!==false;state.similar=!!p.similar;})();
 
 function colorOf(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;return `hsl(${h%360} 55% 42%)`;}
 const initial=n=>esc((n||"?").trim()[0].toUpperCase());
@@ -760,10 +761,23 @@ function renderUnknown(){
   [{k:true,l:"Include"},{k:false,l:"Hide"}].forEach(o=>{const b=document.createElement("button");b.className="chip"+(state.unknownYrs===o.k?" on":"");b.textContent=o.l;
     b.onclick=()=>{state.unknownYrs=o.k;[...el.children].forEach(x=>x.classList.toggle("on",x===b));b.blur();repaint(el);updateCount();};el.appendChild(b);});
 }
+function renderSimilar(){
+  const el=$("c-sim"); el.innerHTML="";
+  [{k:false,l:"Exact words only"},{k:true,l:"Also similar titles"}].forEach(o=>{const b=document.createElement("button");b.className="chip"+(state.similar===o.k?" on":"");b.textContent=o.l;
+    b.onclick=()=>{state.similar=o.k;[...el.children].forEach(x=>x.classList.toggle("on",x===b));b.blur();repaint(el);simInfo();updateCount();};el.appendChild(b);});
+  simInfo();
+}
+function simInfo(){
+  const terms=[...state.terms], ex=terms.map(t=>[t,relatedOf(t)]).filter(x=>x[1].length);
+  $("simInfo").innerHTML=!terms.length?"Applies to words you type in Search. For example, Data Scientist can also show Data Analyst."
+    :!ex.length?"No similar titles known for your search words yet."
+    :ex.map(([t,r])=>`<b>${esc(t)}</b> ${state.similar?"also shows":"could also show"}: ${esc(r.slice(0,6).join(", "))}${r.length>6?"…":""}`).join("<br>");
+}
 function renderRoles(){
   chips($("c-roles"),ROLES,state.roles);
   [...state.terms].reverse().forEach(t=>{const b=document.createElement("button");b.className="chip on";b.textContent=t+"  ×";b.title="Remove";
     b.onclick=()=>{state.terms.delete(t);renderRoles();updateCount();};$("c-roles").prepend(b);});
+  if($("c-sim")) simInfo();
 }
 function addTerm(){const v=$("q").value.trim(); hideSug(); if(!v)return; state.terms.add(v); $("q").value=""; renderRoles(); updateCount();}
 
@@ -858,14 +872,100 @@ function fitLabel(j){
   return `years required<br><span style='font-weight:500'>${d} year${d>1?"s":""} above yours</span>`;}
 const modeOf=j=>j.w||"Not stated";
 
+// Similar job titles for a typed search word (used only when "Also similar titles" is on).
+// Directed: Data Scientist also shows Data Analyst, and the other way round only where it makes sense.
+const RELATED={
+  "data scientist":["data analyst","machine learning engineer","ml engineer","applied scientist","research scientist","algorithm engineer","algorithm developer","ai engineer","analytics engineer","מדען נתונים","דאטה סיינטיסט"],
+  "data analyst":["bi analyst","bi developer","business analyst","product analyst","analytics engineer","data scientist","אנליסט נתונים","אנליסט"],
+  "data engineer":["big data engineer","etl developer","analytics engineer","bi developer","backend engineer","data platform engineer"],
+  "machine learning engineer":["ml engineer","data scientist","ai engineer","algorithm engineer","mlops engineer","computer vision engineer","deep learning engineer","nlp engineer"],
+  "ml engineer":["machine learning engineer","data scientist","ai engineer","algorithm engineer","mlops engineer","computer vision engineer"],
+  "ai engineer":["machine learning engineer","ml engineer","llm engineer","data scientist","algorithm engineer","nlp engineer"],
+  "algorithm engineer":["algorithm developer","computer vision engineer","machine learning engineer","data scientist","research engineer"],
+  "bi analyst":["data analyst","bi developer","business analyst","analytics engineer"],
+  "business analyst":["data analyst","product analyst","systems analyst","bi analyst","אנליסט עסקי"],
+  "product analyst":["data analyst","business analyst","bi analyst","growth analyst"],
+  "backend developer":["backend engineer","server side developer","full stack developer","python developer","java developer","node.js developer","go developer"],
+  "backend engineer":["backend developer","server side developer","full stack engineer","python developer","java developer"],
+  "frontend developer":["frontend engineer","react developer","web developer","ui developer","javascript developer","full stack developer"],
+  "frontend engineer":["frontend developer","react developer","web developer","ui developer","full stack engineer"],
+  "full stack developer":["full stack engineer","fullstack developer","frontend developer","backend developer","web developer"],
+  "full stack engineer":["full stack developer","fullstack engineer","frontend engineer","backend engineer"],
+  "software engineer":["software developer","backend engineer","frontend engineer","full stack engineer","programmer","מהנדס תוכנה","מפתח תוכנה"],
+  "software developer":["software engineer","backend developer","frontend developer","full stack developer","programmer","מפתח תוכנה"],
+  "mobile developer":["ios developer","android developer","react native developer","flutter developer","mobile engineer"],
+  "ios developer":["mobile developer","swift developer","mobile engineer"],
+  "android developer":["mobile developer","kotlin developer","mobile engineer"],
+  "devops engineer":["sre","site reliability engineer","platform engineer","cloud engineer","infrastructure engineer","devsecops engineer"],
+  "sre":["site reliability engineer","devops engineer","platform engineer","production engineer"],
+  "cloud engineer":["devops engineer","cloud architect","platform engineer","infrastructure engineer"],
+  "system administrator":["it administrator","sysadmin","it engineer","network administrator","helpdesk","מנהל רשת","איש סיסטם"],
+  "it":["helpdesk","system administrator","it support","it technician","מחשוב","תמיכה טכנית"],
+  "qa engineer":["qa automation engineer","automation engineer","test engineer","sdet","qa analyst","manual qa","בודק תוכנה","בודקת תוכנה"],
+  "qa automation engineer":["automation engineer","sdet","qa engineer","test automation"],
+  "qa":["qa engineer","automation engineer","test engineer","sdet","בודק תוכנה","בדיקות תוכנה"],
+  "product manager":["product owner","technical product manager","product lead","associate product manager","מנהל מוצר","מנהלת מוצר"],
+  "product owner":["product manager","technical product manager","business analyst"],
+  "project manager":["program manager","delivery manager","implementation manager","operations manager","מנהל פרויקטים","מנהלת פרויקטים"],
+  "product designer":["ux designer","ui designer","ux/ui designer","ui/ux designer","ux researcher","interaction designer","מעצב ux","מעצבת ux"],
+  "ux designer":["product designer","ui designer","ux/ui designer","ui/ux designer","ux researcher"],
+  "ui designer":["product designer","ux designer","ux/ui designer","ui/ux designer","graphic designer","visual designer"],
+  "graphic designer":["visual designer","ui designer","motion designer","creative designer","מעצב גרפי","מעצבת גרפית"],
+  "security engineer":["security analyst","appsec engineer","application security engineer","cloud security engineer","security researcher","penetration tester"],
+  "security researcher":["vulnerability researcher","malware researcher","threat researcher","security analyst","penetration tester","חוקר סייבר","חוקרת סייבר"],
+  "security analyst":["soc analyst","cyber analyst","threat intelligence analyst","security engineer","incident response"],
+  "soc analyst":["security analyst","cyber analyst","incident response","threat intelligence analyst"],
+  "penetration tester":["pentester","red team","security researcher","offensive security","ethical hacker"],
+  "intelligence":["osint","intelligence analyst","threat intelligence","research analyst","מודיעין","אנליסט מודיעין"],
+  "intelligence analyst":["osint analyst","threat intelligence analyst","research analyst","intelligence","אנליסט מודיעין"],
+  "hardware engineer":["electrical engineer","embedded engineer","board design engineer","fpga engineer","asic engineer","מהנדס חומרה","מהנדסת חומרה"],
+  "embedded engineer":["embedded software engineer","firmware engineer","embedded developer","c developer","hardware engineer"],
+  "firmware engineer":["embedded engineer","embedded software engineer","embedded developer"],
+  "electrical engineer":["hardware engineer","electronics engineer","board design engineer","מהנדס חשמל","מהנדסת חשמל"],
+  "mechanical engineer":["mechanical designer","mechanical design engineer","מהנדס מכונות","מהנדסת מכונות"],
+  "account executive":["account manager","sales manager","business development","sdr","bdr","sales representative"],
+  "account manager":["account executive","customer success manager","key account manager","sales manager"],
+  "sdr":["bdr","sales development representative","business development representative","account executive","inside sales"],
+  "sales":["account executive","account manager","sales manager","business development","sdr","bdr","מכירות"],
+  "customer success manager":["customer success","account manager","onboarding manager","implementation manager","customer support"],
+  "customer success":["customer success manager","account manager","onboarding","implementation","customer support"],
+  "support engineer":["technical support","customer support engineer","tier 2 support","application support","solutions engineer"],
+  "solutions engineer":["sales engineer","presales engineer","solutions architect","support engineer"],
+  "marketing manager":["product marketing manager","growth manager","performance marketing manager","digital marketing manager","content manager","מנהל שיווק","מנהלת שיווק"],
+  "product marketing manager":["marketing manager","product marketing","growth manager","content manager"],
+  "growth":["growth manager","performance marketing","user acquisition","marketing manager","ppc"],
+  "content writer":["copywriter","content manager","technical writer","קופירייטר","כותב תוכן"],
+  "technical writer":["content writer","documentation","copywriter"],
+  "recruiter":["talent acquisition","technical recruiter","sourcer","talent acquisition partner","רכז גיוס","רכזת גיוס","מגייס","מגייסת"],
+  "hr":["hrbp","hr manager","people partner","human resources","talent acquisition","משאבי אנוש"],
+  "hrbp":["hr business partner","people partner","hr manager","hr generalist"],
+  "accountant":["bookkeeper","controller","financial analyst","רואה חשבון","מנהל חשבונות","מנהלת חשבונות","חשב"],
+  "controller":["accountant","financial controller","finance manager","חשב"],
+  "financial analyst":["fp&a","finance analyst","business analyst","controller"],
+  "lawyer":["legal counsel","counsel","attorney","legal advisor","עורך דין","עורכת דין","יועץ משפטי"],
+  "operations manager":["project manager","program manager","operations","office manager","תפעול"],
+  "office manager":["administrative assistant","office administrator","executive assistant","מנהלת משרד","אדמיניסטרציה"],
+  "student":["intern","internship","junior","graduate","סטודנט","סטודנטית","משרת סטודנט"],
+  "junior":["entry level","graduate","student","intern","ג'וניור"],
+};
+const SENIORITY=/\b(senior|sr\.?|junior|jr\.?|lead|principal|staff|head of|chief|associate|mid|mid-level|ראש צוות|בכיר|בכירה|זוטר|זוטרה)\b\s*/g;
+function relatedOf(t){
+  t=t.toLowerCase().trim(); const core=t.replace(SENIORITY,"").replace(/\s+/g," ").trim();
+  const out=new Set();
+  for(const k in RELATED){ if(k===t||k===core||(k.includes(" ")&&termRx(k).test(t))) RELATED[k].forEach(x=>out.add(x)); }
+  out.delete(t); out.delete(core);
+  return [...out];
+}
 function hay(j){return j._h||(j._h=[j.t,j.c,j.r,...(j.rs||[]),...(j.m||[])].join(" ").toLowerCase());}
 // A search term matches whole words only ("HR" must not match "three" or "through"); a Hebrew term may carry one prefix letter (ו, ה, ב...)
 function termRx(t){ const e=t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), heb=/^[֐-׿]/.test(t);
   return new RegExp("(^|[^a-z0-9֐-׿])"+(heb?"[והבלמשכ]?":"")+e+"(?![a-z0-9֐-׿])"); }
 function filtered(){
   const terms=[...state.terms].map(t=>termRx(t.toLowerCase()));
+  // similar titles are looked for in the job title only (requirements mention many other roles)
+  const sim=state.similar?[...new Set([...state.terms].flatMap(t=>relatedOf(t)))].map(t=>termRx(t)):[];
   return JOBS.filter(j=>
-    ((!state.roles.size&&!terms.length)||(j.rs||[j.r]).some(r=>state.roles.has(r))||terms.some(rx=>rx.test(hay(j)))) &&
+    ((!state.roles.size&&!terms.length)||(j.rs||[j.r]).some(r=>state.roles.has(r))||terms.some(rx=>rx.test(hay(j)))||(sim.length&&sim.some(rx=>rx.test(j._tl||(j._tl=(j.t||"").toLowerCase()))))) &&
     (!state.locs.size||state.locs.has(j.rg)) &&
     (!state.modes.size||state.modes.has(modeOf(j))) &&
     (j.y==null?state.unknownYrs:(j.y-state.yrs<=state.gap)));
@@ -1476,7 +1576,7 @@ renderRoles();
 chips($("c-locs"),REGIONS,state.locs);
 chips($("c-mode"),MODES,state.modes);
 chips($("c-gap"),GAPS,null,true);
-renderUnknown();
+renderUnknown();renderSimilar();
 $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
 $("startBtn").disabled=true; $("startBtn").style.opacity=.5;
 go("loading");
@@ -1512,7 +1612,7 @@ async function boot(session){
     // with the saved list on screen, swap in the fresh one when it arrives (the next cards come from it)
     if(useCache) fresh.then(j=>{ JOBS=j; updateCount(); }).catch(()=>{});
     JOBS=jobs; applyCloud(d);
-    renderRoles();chips($("c-locs"),REGIONS,state.locs);chips($("c-mode"),MODES,state.modes);chips($("c-gap"),GAPS,null,true);renderUnknown();
+    renderRoles();chips($("c-locs"),REGIONS,state.locs);chips($("c-mode"),MODES,state.modes);chips($("c-gap"),GAPS,null,true);renderUnknown();renderSimilar();
     $("yrs").value=state.yrs; $("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");
     const byId=new Map(JOBS.map(j=>[j.id,j]));
     state.likes=store.get("likes",[]).map(id=>byId.get(id)).filter(Boolean);
