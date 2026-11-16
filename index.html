@@ -692,6 +692,24 @@ function pickCv(j){
   bg.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>{ const cv=CVS[+b.dataset.i]; bg.remove(); saveSwipe(j,"apply",true,cv); openInApp(j,cv); });
   bg.querySelector("[data-cancel]").onclick=()=>{ bg.remove(); undoJob(j.id); };
 }
+// Swipe up outside the app (website in a browser): the form can't be filled here, so send the user to the company's page
+function webApply(j){
+  const url=safeUrl(formUrlOf(j)||j.au||j.u);
+  document.getElementById("webAp")?.remove();
+  const bg=document.createElement("div"); bg.id="webAp";
+  bg.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center";
+  bg.innerHTML=`<div style="background:var(--surface);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 18px 28px">
+    <div style="font:800 18px Inter;margin-bottom:4px">Apply to ${esc(j.c)}</div>
+    <div style="color:var(--muted);font-size:14px;margin-bottom:10px" dir="auto">${esc(j.t)}</div>
+    <div style="font-size:14px;margin-bottom:14px">Not sent yet. Open the company's page and send your application there. It's also kept under My lists → Applied.${IN_APP?"":" In the Hitch app the form opens filled in for you."}</div>
+    <a data-go href="${esc(url)}" target="_blank" rel="noopener" style="display:block;text-align:center;padding:14px;border-radius:14px;background:var(--accent);color:#fff;font:700 16px Inter;text-decoration:none">Open the application page ↗</a>
+    <button data-later style="display:block;width:100%;padding:13px;border:none;border-radius:14px;background:var(--chip);font:700 15px Inter;cursor:pointer;margin-top:8px">Later</button></div>`;
+  document.body.appendChild(bg);
+  bg.querySelector("[data-go]").onclick=()=>{ bg.remove();
+    if(UID) SB.from("applications").update({detail:"You opened the company's page. Not sent through Hitch."}).eq("job_id",j.id).eq("status","queued").then(()=>{},()=>{}); };
+  bg.querySelector("[data-later]").onclick=()=>bg.remove();
+  bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
+}
 async function saveSwipe(j,dir,inAppForm,cv){
   if(!UID)return;
   try{
@@ -1043,7 +1061,7 @@ function swipe(dir){
   saveSwipe(j,dir,inAppForm,defaultCv());
   if(dir==="like") toast(`Added to wishlist · ${j.c}`);
   else if(inAppForm) openInApp(j,defaultCv());
-  else if(dir==="apply") toast(IN_APP?`Saved · ${j.c} can't be filled in the app yet`:`Saved · open the Hitch app to apply to ${j.c}`);
+  else if(dir==="apply") webApply(j);
   card.style.pointerEvents="none";
   advanceDeck(card);
 }
