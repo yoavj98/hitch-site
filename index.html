@@ -167,6 +167,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .form label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:flex;flex-direction:column;gap:6px}
 .form input{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:13px;font:500 16px Inter;color:var(--ink);text-transform:none;letter-spacing:0}
 .form input.found{border-color:#9fd9bf}
+.phrow{display:flex;gap:8px}.phrow input{flex:1;min-width:0}.form select{-webkit-appearance:none;appearance:none;border:1px solid var(--line);background:#fff url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%276%27%3E%3Cpath d=%27M0 0l5 6 5-6z%27 fill=%27%23888%27/%3E%3C/svg%3E") no-repeat right 10px center;border-radius:12px;padding:0 26px 0 12px;font:400 16px var(--sans);color:var(--ink);text-transform:none;letter-spacing:0;flex:0 0 88px;width:88px;text-overflow:ellipsis}
 .row2{display:flex;gap:10px}.row2 label{flex:1;min-width:0}.form input{width:100%}
 .how{display:flex;flex-direction:column;gap:12px;margin:10px 0}
 .how div{background:var(--surface);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;font-size:15px;line-height:1.35}
@@ -392,7 +393,7 @@ html.doc-scroll .sheet:not(.open),html.doc-scroll .sheet-bg:not(.open){display:n
       <div class="form">
         <div class="row2"><label>First name<input id="fFirst" autocomplete="given-name"></label><label>Last name<input id="fLast" autocomplete="family-name"></label></div>
         <label>Email<input id="fEmail" type="email" autocomplete="email"></label>
-        <label>Phone<input id="fPhone" type="tel" autocomplete="tel"></label>
+        <label>Mobile phone<span class="phrow"><select id="fCc" aria-label="Country code"></select><input id="fPhone" type="tel" autocomplete="tel-national" placeholder="050-1234567"></span></label>
         <label>Years of work experience<input id="fYears" type="number" min="0" max="40" inputmode="numeric"></label>
       </div>
       <div class="err" id="cfErr" style="margin-top:12px"></div>
@@ -1366,6 +1367,7 @@ function fillConfirm(){
   const p=ob.profile, f=ob._found||{}; if(!p.email&&window.__authEmail)p.email=window.__authEmail;
   [["fFirst","first"],["fLast","last"],["fEmail","email"],["fPhone","phone"],["fYears","years"]].forEach(([id,k])=>{
     $(id).value=p[k]??""; $(id).classList.toggle("found",f[k]!=null&&f[k]!=="");});
+  { const [c,n]=splitPhone(p.phone); $("fCc").value=c; $("fPhone").value=n; $("fCc").dispatchEvent(new Event("change")); }
   $("cfErr").textContent="";
   const cvn=p.cvName||(defaultCv()&&defaultCv().name)||"";
   $("cfCv").classList.toggle("show",!!ob.done); $("cfCvName").textContent=cvn||"No CV yet";
@@ -1375,20 +1377,38 @@ function fillConfirm(){
 // Sign-up field checks
 const NAME_RE=/^[\p{L}][\p{L}\p{M}' .\-]{0,38}[\p{L}\p{M}.]$|^[\p{L}]$/u;
 const EMAIL_RE=/^[A-Za-z0-9._%+\-]+@[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
-// Israeli numbers: mobile 05X-XXXXXXX, landline 0X-XXXXXXX, 07X-XXXXXXX; +972 is turned into 0. Other countries: + and 8-15 digits.
-function normPhone(raw){
-  const s=(raw||"").trim(); if(/[^\d+\-\s().]/.test(s)) return null;
-  let d=s.replace(/\D/g,""); const plus=s.startsWith("+")||s.startsWith("00");
-  if(s.startsWith("00")) d=d.slice(2);
-  if(plus||d.startsWith("972")){
-    if(d.startsWith("972")){ d="0"+d.slice(3).replace(/^0/,""); }
-    else return d.length>=8&&d.length<=15?"+"+d:null;
+// Mobile phone with a country code. Israel (+972): mobile only, 05X-XXXXXXX, also typed as 5XXXXXXXX or with +972.
+// Other countries: the code plus 6-13 digits, saved as "+CC digits".
+const CC=[["972","Israel"],["1","US / Canada"],["44","UK"],["49","Germany"],["33","France"],["7","Russia"],["380","Ukraine"],["34","Spain"],["39","Italy"],["31","Netherlands"],["41","Switzerland"],["971","UAE"],["91","India"],["61","Australia"],["55","Brazil"],["54","Argentina"],["27","South Africa"]];
+$("fCc").innerHTML=CC.map(([c,n])=>`<option value="${c}">+${c} ${n}</option>`).join("");
+function normPhone(cc,raw){
+  const s=(raw||"").trim(); if(!s||/[^\d+\-\s().]/.test(s)) return null;
+  let d=s.replace(/\D/g,"");
+  if(s.startsWith("+")||s.startsWith("00")){ // a full international number typed in the box
+    if(s.startsWith("00")) d=d.slice(2);
+    const hit=CC.map(x=>x[0]).sort((a,b)=>b.length-a.length).find(c=>d.startsWith(c));
+    if(hit){ cc=hit; d=d.slice(hit.length); } else return d.length>=8&&d.length<=15?"+"+d:null;
+  } else if(cc==="972"&&/^9725\d{8}$/.test(d)) d=d.slice(3);
+  if(cc==="972"){
+    d=d.replace(/^0/,"");
+    return /^5\d{8}$/.test(d)?"0"+d.slice(0,2)+"-"+d.slice(2):null;
   }
-  if(/^05\d{8}$/.test(d)) return d.slice(0,3)+"-"+d.slice(3);
-  if(/^07\d{8}$/.test(d)) return d.slice(0,3)+"-"+d.slice(3);
-  if(/^0[2-489]\d{7}$/.test(d)) return d.slice(0,2)+"-"+d.slice(2);
-  return null;
+  d=d.replace(/^0+/,"");
+  return d.length>=6&&d.length<=13?"+"+cc+" "+d:null;
 }
+function splitPhone(v){ // saved value back into code + number for the screen
+  v=(v||"").trim(); if(!v) return ["972",""];
+  if(/^0/.test(v)) return ["972",v];
+  const d=v.replace(/\D/g,""); const hit=v.startsWith("+")&&CC.map(x=>x[0]).sort((a,b)=>b.length-a.length).find(c=>d.startsWith(c));
+  if(hit) return hit==="972"?["972",normPhone("972",v)||v]:[hit,d.slice(hit.length)];
+  return ["972",v];
+}
+// the open list shows "+44 UK"; the closed box shows only "+44" so it fits
+const ccShort=()=>[...$("fCc").options].forEach((o,i)=>o.textContent=o.selected?"+"+CC[i][0]:`+${CC[i][0]} ${CC[i][1]}`);
+const ccLong=()=>[...$("fCc").options].forEach((o,i)=>o.textContent=`+${CC[i][0]} ${CC[i][1]}`);
+$("fCc").addEventListener("focus",ccLong); $("fCc").addEventListener("pointerdown",ccLong); $("fCc").addEventListener("blur",ccShort);
+$("fCc").addEventListener("change",()=>{ ccShort(); $("fPhone").placeholder=$("fCc").value==="972"?"050-1234567":"Phone number"; });
+ccShort();
 $("fYears").setAttribute("max","50"); $("fYears").setAttribute("step","1");
 $("fYears").addEventListener("input",e=>{ const v=e.target.value.replace(/\D/g,"").slice(0,2); if(v!==e.target.value) e.target.value=v; });
 $("fPhone").setAttribute("maxlength","20");
@@ -1404,12 +1424,13 @@ $("cfNext").onclick=()=>{
   if(!last) return cfFail("fLast","Please add your last name.");
   if(!NAME_RE.test(last)) return cfFail("fLast","Last name can only have letters (no numbers or symbols).");
   if(!EMAIL_RE.test(email)) return cfFail("fEmail","Please check your email address, for example name@gmail.com.");
-  const phone=normPhone(phoneRaw);
-  if(!phone) return cfFail("fPhone","Please check your phone number, for example 050-1234567.");
+  const phone=normPhone($("fCc").value,phoneRaw);
+  if(!phone) return cfFail("fPhone",$("fCc").value==="972"?"Please enter an Israeli mobile number, for example 050-1234567.":"Please check your phone number.");
   if(y!==""&&!/^\d{1,2}$/.test(y)) return cfFail("fYears","Years of experience should be a whole number, for example 3.");
   if(y!==""&&+y>50) return cfFail("fYears","Years of experience can't be more than 50.");
   $("cfErr").textContent="";
-  p.first=first; p.last=last; p.email=email; p.phone=phone; $("fPhone").value=phone;
+  p.first=first; p.last=last; p.email=email; p.phone=phone;
+  { const [c,n]=splitPhone(phone); $("fCc").value=c; $("fPhone").value=n; ccShort(); }
   p.years=y===""?null:+y;
   if(p.years!=null){state.yrs=Math.min(12,p.years);$("yrs").value=state.yrs;$("yrsOut").textContent=state.yrs+(state.yrs==12?"+":"");}
   saveOb(); updateCount(); if(ob.done){ if(!goBack()) go("deck"); toast("Saved"); } else go("setup");
